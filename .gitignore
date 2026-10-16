@@ -1,11 +1,18 @@
-# Build results
-bin/
-obj/
-*.user
-
-# IDE
-.vs/
-.idea/
-
-# Test output
-TestResults/
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/
+uploads/
+work/
+outputs/
+.DS_Store
+Thumbs.db
