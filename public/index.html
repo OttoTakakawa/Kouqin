@@ -1,1 +1,319 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Harmonica · 后端服务</title></head><body><main><h1>Harmonica 后端服务</h1><p>服务已启动。正式写谱界面尚未实现。</p><p><a href="/api/health">查看服务状态</a> · <a href="/api/library">查看乐谱库</a></p></main></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#202629" />
+    <title>Harmonica · 口琴写谱台</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar" aria-label="乐谱库">
+        <a class="brand" href="/" aria-label="Harmonica 首页"
+          ><span class="brand-icon" aria-hidden="true">▥</span
+          ><span>Harmonica<small>口琴写谱台</small></span></a
+        >
+        <button id="new-score" class="primary">＋ 新建乐谱</button>
+        <label class="search"
+          ><span aria-hidden="true">⌕</span
+          ><input
+            id="search"
+            type="search"
+            placeholder="搜索乐谱"
+            aria-label="搜索乐谱"
+        /></label>
+        <div class="library-controls">
+          <select id="library-filter" aria-label="乐谱筛选">
+            <option value="all">全部乐谱</option>
+            <option value="native">可编辑</option>
+            <option value="favorite">我的收藏</option>
+            <option value="练习中">练习中</option>
+            <option value="original">原有收藏</option></select
+          ><button
+            id="refresh"
+            class="icon"
+            title="重新读取列表"
+            aria-label="重新读取列表"
+          >
+            ↻
+          </button>
+        </div>
+        <div id="library" class="library" aria-live="polite">
+          正在读取乐谱库…
+        </div>
+        <div class="sidebar-bottom">
+          <span id="library-count">本地乐谱库</span
+          ><button id="import-open" class="text-button">
+            导入数字谱 / JSON ↗</button
+          ><span class="tiny">原收藏只读 · 新谱独立保存</span>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header>
+          <div class="modes">
+            <button id="edit-mode" class="active">写谱</button
+            ><button id="practice-mode">练习</button>
+          </div>
+          <span id="save-state" role="status">未打开乐谱</span
+          ><button id="settings-open" class="subtle">快捷键与外观</button>
+        </header>
+        <main>
+          <div class="title-row">
+            <div class="title-info">
+              <div class="eyebrow" id="breadcrumb">我的乐谱 / 新建</div>
+              <input
+                id="title"
+                aria-label="乐谱标题"
+                placeholder="未命名乐谱"
+                maxlength="200"
+                value="未命名乐谱"
+              />
+            </div>
+            <button
+              id="favorite"
+              class="icon"
+              aria-label="收藏乐谱"
+              aria-pressed="false"
+              title="收藏"
+            >
+              ☆</button
+            ><button id="save" class="primary save-button">保存乐谱 ↗</button>
+          </div>
+          <div class="score-meta">
+            <label
+              >调性
+              <select id="key" aria-label="调性">
+                <option>C</option>
+                <option>A</option>
+              </select></label
+            ><label class="edit-only"
+              >分类
+              <input
+                id="category"
+                aria-label="分类"
+                placeholder="未分类"
+                maxlength="100"
+                list="categories" /></label
+            ><datalist id="categories"></datalist
+            ><select id="status" aria-label="练习状态">
+              <option>未练习</option>
+              <option>练习中</option>
+              <option>熟练</option></select
+            ><span class="meta-right">半音阶口琴 · 数字谱</span>
+          </div>
+          <div id="original-view" hidden>
+            <div class="original-actions">
+              <span>原有收藏 · 文字草稿的音高与音长需要校对</span
+              ><button id="original-import" class="subtle">
+                从文字草稿新建
+              </button>
+            </div>
+            <div id="original-images"></div>
+            <details>
+              <summary>查看笔记文字</summary>
+              <pre id="original-text"></pre>
+            </details>
+          </div>
+          <section id="editor-shell" class="sheet" aria-label="数字谱编辑台">
+            <div class="sheet-heading">
+              <span>MELODY <b>/</b> 旋律</span
+              ><span id="note-count">0 个音符</span>
+            </div>
+            <div
+              id="score"
+              class="score"
+              tabindex="0"
+              role="group"
+              aria-label="数字谱编辑区"
+            ></div>
+            <div class="note-tools edit-only">
+              <span class="muted">当前音符</span
+              ><strong id="selected-label">—</strong
+              ><span class="separator"></span><span>音长</span
+              ><button id="shorten" class="small" aria-label="缩短音长">
+                −</button
+              ><output id="note-duration">—</output
+              ><button id="lengthen" class="small" aria-label="延长音长">
+                ＋</button
+              ><label><input id="fine" type="checkbox" />细调</label
+              ><span class="tool-spacer"></span
+              ><button id="duplicate" class="text-button">复制本句</button
+              ><button
+                id="undo"
+                class="icon"
+                aria-label="撤销"
+                title="撤销 Ctrl+Z"
+              >
+                ↶</button
+              ><button
+                id="redo"
+                class="icon"
+                aria-label="重做"
+                title="重做 Ctrl+Shift+Z"
+              >
+                ↷
+              </button>
+            </div>
+          </section>
+          <div id="keyboard-help" class="keyboard edit-only"></div>
+          <div class="document-actions edit-only">
+            <button id="export" class="text-button">导出 JSON</button
+            ><button id="delete" class="text-button">删除乐谱</button
+            ><span id="message" role="status"></span>
+          </div>
+        </main>
+        <footer class="transport">
+          <div class="play-controls">
+            <button id="play" class="play" aria-label="播放">
+              ▶ <span>播放</span></button
+            ><button
+              id="stop"
+              class="icon"
+              aria-label="停止"
+              title="停止 / Escape"
+            >
+              ■
+            </button>
+          </div>
+          <select id="scope" aria-label="播放范围">
+            <option value="all">整首</option>
+            <option value="phrase">当前句</option></select
+          ><label class="check-label"
+            ><input id="loop" type="checkbox" />循环</label
+          >
+          <div class="transport-divider"></div>
+          <label
+            >速度
+            <input
+              id="bpm"
+              aria-label="速度 BPM"
+              type="number"
+              min="30"
+              max="240"
+              value="90"
+            /><span class="muted">BPM</span></label
+          ><label
+            >音色
+            <select id="voice" aria-label="音色">
+              <option value="harmonica">口琴</option>
+              <option value="synth">合成音</option>
+            </select></label
+          ><label class="volume-label"
+            >音量
+            <input
+              id="volume"
+              type="range"
+              aria-label="音量"
+              min="0"
+              max="100"
+              value="55" /></label
+          ><span id="play-position">00:00 / 00:00</span
+          ><label class="check-label effects-toggle"
+            ><input id="effects" type="checkbox" />音符特效</label
+          >
+        </footer>
+      </div>
+    </div>
+    <dialog id="import-dialog">
+      <form id="import-form">
+        <div class="dialog-heading">
+          <h2>导入乐谱</h2>
+          <button type="button" class="icon close-dialog" aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <p>
+          粘贴数字谱或模型生成的
+          JSON，也可以选择文件。数字谱会先以等长音符导入，再用 Z / C 调整。
+        </p>
+        <textarea
+          id="import-text"
+          aria-label="导入内容"
+          rows="10"
+          placeholder="2212 12321 (5)&#10;1(767) (67)11"
+        ></textarea
+        ><label class="file-label"
+          >选择 .json / .txt 文件<input
+            id="import-file"
+            type="file"
+            accept=".json,.txt"
+        /></label>
+        <p class="tiny">
+          [1] 高音 · (1) 低音 · #1 推键 · 0 休止；空格只作视觉分组。JSON
+          保留准确音长。
+        </p>
+        <div id="import-error" class="error" role="alert"></div>
+        <div class="dialog-actions">
+          <button type="button" class="subtle close-dialog">取消</button
+          ><button class="primary" type="submit">新建为可编辑草稿</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="settings-dialog">
+      <form id="settings-form">
+        <div class="dialog-heading">
+          <h2>写得顺手一点</h2>
+          <button type="button" class="icon close-dialog" aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <p>数字键输入音符。修饰键可以叠加，例如高音 + 推键。</p>
+        <div class="settings-grid">
+          <label
+            >高音修饰键<select name="high">
+              <option>Shift</option>
+              <option>Control</option>
+              <option>Alt</option>
+            </select></label
+          ><label
+            >低音修饰键<select name="low">
+              <option>Control</option>
+              <option>Shift</option>
+              <option>Alt</option>
+            </select></label
+          ><label
+            >推键修饰键<select name="sharp">
+              <option>Alt</option>
+              <option>Control</option>
+              <option>Shift</option>
+            </select></label
+          ><label>延长音符<input name="longer" maxlength="1" required /></label
+          ><label>缩短音符<input name="shorter" maxlength="1" required /></label
+          ><label
+            >换行<select name="newline">
+              <option>Enter</option>
+              <option>Tab</option>
+            </select></label
+          ><label
+            >配色<select id="theme">
+              <option value="ink">墨蓝与纸白</option>
+              <option value="forest">松绿</option>
+              <option value="dark">夜间</option>
+            </select></label
+          ><label
+            >谱面大小<input
+              id="zoom"
+              type="range"
+              min="80"
+              max="150"
+              value="100"
+          /></label>
+        </div>
+        <p class="tiny">
+          Z / C 类按键只在谱面聚焦时生效；按住 Shift 可细调。空格分组，0
+          休止，方向键移动光标，Backspace / Delete 删除。Ctrl+S 保存，Ctrl+Z
+          撤销。
+        </p>
+        <div id="settings-error" class="error" role="alert"></div>
+        <div class="dialog-actions">
+          <button type="button" id="reset-keys" class="subtle">恢复默认</button
+          ><button class="primary" type="submit">保存设置</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" role="status" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
