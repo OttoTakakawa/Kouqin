@@ -17,6 +17,9 @@ npm test
 原谱只读，新谱保存在本机 `data/`，不会提交 Git。
 接口、环境变量、JSON 转谱格式与当前限制见 [API 文档](docs/API.md)。
 
+前端 [可点击视觉提案](docs/design/harmonica-studio.html) 已存档，配色仍待改进。特效可关闭并记住偏好。
+口琴音色的候选与接入注意事项见 [音色调研](docs/SOUNDFONTS.md)，当前尚未接入真实音频。
+
 ## 已确认方向
 
 - 主要使用新 WebUI 编辑乐谱，管理现有本地收藏。
