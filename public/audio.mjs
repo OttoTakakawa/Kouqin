@@ -1,10 +1,58 @@
 import { Soundfont } from "smplr";
 import { timeline } from "./model.mjs";
+import harmonicaLoops from "./audio/harmonica-loops-calibrated.json";
+import musyngkiteLoops from "./audio/musyngkite-loops-calibrated.json";
+import musyngkiteSource from "./audio/musyngkite-harmonica-mp3.js";
+
+import generaluserLoops from "./audio/generaluser-loops.json";
+import generaluserSource from "./audio/generaluser-harmonica-mp3.js";
+import vcslNormalLoops from "./audio/vcsl-normal-loops.json";
+import vcslNormalSource from "./audio/vcsl-normal-harmonica-mp3.js";
+import vcslSoftLoops from "./audio/vcsl-soft-loops.json";
+import vcslSoftSource from "./audio/vcsl-soft-harmonica-mp3.js";
+import vcslVibLoops from "./audio/vcsl-vib-loops.json";
+import vcslVibSource from "./audio/vcsl-vib-harmonica-mp3.js";
+
+const sampledVoices = {
+  harmonica: {
+    url: "/audio/harmonica-mp3.js",
+    loops: harmonicaLoops,
+    gain: 20,
+  },
+  musyngkite: {
+    url:
+      "data:text/plain;charset=utf-8," + encodeURIComponent(musyngkiteSource),
+    loops: musyngkiteLoops,
+    gain: 20,
+  },
+  generaluser: {
+    url:
+      "data:text/plain;charset=utf-8," + encodeURIComponent(generaluserSource),
+    loops: generaluserLoops,
+    gain: 20,
+  },
+  "vcsl-normal": {
+    url:
+      "data:text/plain;charset=utf-8," + encodeURIComponent(vcslNormalSource),
+    loops: vcslNormalLoops,
+    gain: 4.5,
+  },
+  "vcsl-soft": {
+    url: "data:text/plain;charset=utf-8," + encodeURIComponent(vcslSoftSource),
+    loops: vcslSoftLoops,
+    gain: 8,
+  },
+  "vcsl-vib": {
+    url: "data:text/plain;charset=utf-8," + encodeURIComponent(vcslVibSource),
+    loops: vcslVibLoops,
+    gain: 3,
+  },
+};
 
 export class Player {
   context = null;
-  instrument = null;
-  loading = null;
+  instruments = new Map();
+  loading = new Map();
   playing = false;
   paused = false;
   offset = 0;
@@ -25,22 +73,28 @@ export class Player {
       this.gain.gain.value = this.volume;
       this.gain.connect(this.context.destination);
     }
-    if (voice === "harmonica" && !this.instrument) {
-      this.loading ||= (async () => {
-        const instrument = Soundfont(this.context, {
-          instrumentUrl: "/audio/harmonica-mp3.js",
-          loopDataUrl: "/audio/harmonica-loop.json",
-          destination: this.gain,
-          extraGain: 1,
-          volume: 70,
+    const bank = sampledVoices[voice];
+    if (bank && !this.instruments.has(voice)) {
+      if (!this.loading.has(voice)) {
+        const pending = (async () => {
+          const instrument = Soundfont(this.context, {
+            instrumentUrl: bank.url,
+            loopDataUrl:
+              "data:application/json," +
+              encodeURIComponent(JSON.stringify(bank.loops)),
+            destination: this.gain,
+            extraGain: bank.gain,
+            volume: 100,
+          });
+          await instrument.ready;
+          this.instruments.set(voice, instrument);
+        })().catch((e) => {
+          this.loading.delete(voice);
+          throw Error("口琴音色加载失败，可切换其他音色重试。" + e.message);
         });
-        await instrument.ready;
-        this.instrument = instrument;
-      })().catch((e) => {
-        this.loading = null;
-        throw Error("口琴音色加载失败，可切换合成音重试。" + e.message);
-      });
-      await this.loading;
+        this.loading.set(voice, pending);
+      }
+      await this.loading.get(voice);
     }
   }
 
@@ -68,7 +122,10 @@ export class Player {
     }
     this.voice = options.voice;
     this.loop = options.loop;
-    this.offset = 0;
+    this.offset =
+      this.sequence.events.find(
+        (e) => e.index >= (options.initialIndex ?? options.start ?? 0),
+      )?.at ?? 0;
     this.paused = false;
     this.playing = true;
     this.schedule();
@@ -94,7 +151,7 @@ export class Player {
 
   tick() {
     this.position = Math.max(
-      0,
+      this.offset,
       this.context.currentTime - this.epoch + this.offset,
     );
     if (this.position >= this.sequence.duration) {
@@ -130,8 +187,10 @@ export class Player {
   }
 
   sound(note, time, duration) {
-    if (this.voice === "harmonica") {
-      this.instrument.start({ note, time, duration, velocity: 85 });
+    if (sampledVoices[this.voice]) {
+      this.instruments
+        .get(this.voice)
+        .start({ note, time, duration, velocity: 85 });
       return;
     }
     const osc = this.context.createOscillator(),
@@ -177,7 +236,7 @@ export class Player {
   silence() {
     clearInterval(this.tickTimer);
     cancelAnimationFrame(this.raf);
-    this.instrument?.stop();
+    for (const instrument of this.instruments.values()) instrument.stop();
     for (const osc of this.nodes) {
       try {
         osc.stop();

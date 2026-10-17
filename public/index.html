@@ -30,6 +30,7 @@
             <option value="native">可编辑</option>
             <option value="favorite">我的收藏</option>
             <option value="练习中">练习中</option>
+            <option value="archived">归档版本</option>
             <option value="original">原有收藏</option></select
           ><button
             id="refresh"
@@ -129,17 +130,38 @@
               aria-label="数字谱编辑区"
             ></div>
             <div class="note-tools edit-only">
-              <span class="muted">当前音符</span
+              <span id="selection-caption" class="muted">当前音符</span
               ><strong id="selected-label">—</strong
               ><span class="separator"></span><span>音长</span
               ><button id="shorten" class="small" aria-label="缩短音长">
                 −</button
               ><output id="note-duration">—</output
+              ><span id="note-duration-name" class="muted"></span
               ><button id="lengthen" class="small" aria-label="延长音长">
                 ＋</button
-              ><label><input id="fine" type="checkbox" />细调</label
-              ><span class="tool-spacer"></span
-              ><button id="duplicate" class="text-button">复制本句</button
+              ><label title="Z / C 步进中加入附点音长；也可按住 Shift"
+                ><input id="dotted-steps" type="checkbox" />含附点</label
+              >
+              <div
+                id="batch-duration-tools"
+                class="batch-duration-tools"
+                hidden
+              >
+                <label id="set-duration-label" for="batch-duration">设为</label>
+                <select id="batch-duration" aria-label="标准音长">
+                  <option value="" disabled>选择标准音长</option>
+                </select>
+                <button id="apply-batch-duration" class="small">应用</button>
+              </div>
+              <span class="tool-spacer"></span>
+              <button
+                id="select-phrase"
+                class="text-button"
+                title="选中当前句的所有音符"
+              >
+                选本句
+              </button>
+              <button id="duplicate" class="text-button">复制本句</button
               ><button
                 id="undo"
                 class="icon"
@@ -160,10 +182,44 @@
           <div id="keyboard-help" class="keyboard edit-only"></div>
           <div class="document-actions edit-only">
             <button id="export" class="text-button">导出 JSON</button
+            ><button id="restore-archive" class="text-button" hidden>
+              恢复此版本</button
             ><button id="delete" class="text-button">删除乐谱</button
             ><span id="message" role="status"></span>
           </div>
         </main>
+        <div class="playback-range-controls" aria-label="播放位置与循环端点">
+          <span>起播 <output id="playback-cue">—</output></span>
+          <button
+            id="play-from-start"
+            class="text-button"
+            title="从整首开头播放"
+          >
+            从头播放
+          </button>
+          <span class="range-divider"></span>
+          <button
+            id="set-loop-a"
+            class="small"
+            title="将点击的音符设为循环起点"
+          >
+            设 A
+          </button>
+          <output id="loop-a">A —</output>
+          <button
+            id="set-loop-b"
+            class="small"
+            title="将点击的音符设为循环终点，包含这个音"
+          >
+            设 B
+          </button>
+          <output id="loop-b">B —</output>
+          <button id="loop-selection" class="text-button edit-only">
+            选区设为循环
+          </button>
+          <button id="clear-loop-points" class="text-button">清除端点</button>
+          <span class="playback-hint">点击定位 · 双击播放</span>
+        </div>
         <footer class="transport">
           <div class="play-controls">
             <button id="play" class="play" aria-label="播放">
@@ -177,27 +233,49 @@
               ■
             </button>
           </div>
+          <button id="loop-phrase" class="text-button" aria-pressed="false">
+            循环本行
+          </button>
           <select id="scope" aria-label="播放范围">
             <option value="all">整首</option>
-            <option value="phrase">当前句</option></select
+            <option value="phrase">当前句</option>
+            <option value="ab" disabled>A–B 片段</option></select
           ><label class="check-label"
             ><input id="loop" type="checkbox" />循环</label
           >
           <div class="transport-divider"></div>
-          <label
-            >速度
+          <div class="duration-scale-control">
+            <label for="duration-scale">播放速度</label>
             <input
-              id="bpm"
-              aria-label="速度 BPM"
-              type="number"
+              id="duration-scale"
+              type="range"
               min="30"
               max="240"
+              step="1"
               value="90"
-            /><span class="muted">BPM</span></label
-          ><label
+              aria-valuetext="90 BPM"
+              title="一个速度控制整首快慢；音符长短比例不变"
+            />
+            <output id="duration-scale-value" for="duration-scale"
+              >90 BPM</output
+            >
+            <select id="tempo-preset" aria-label="速度预设">
+              <option value="">自定义</option>
+              <option value="60">舒缓</option>
+              <option value="90">适中</option>
+              <option value="120">轻快</option>
+              <option value="160">快速</option>
+            </select>
+          </div>
+          <label
             >音色
             <select id="voice" aria-label="音色">
-              <option value="harmonica">口琴</option>
+              <option value="harmonica">口琴 · FluidR3</option>
+              <option value="musyngkite">口琴 · MusyngKite</option>
+              <option value="generaluser">口琴 · GeneralUser GS</option>
+              <option value="vcsl-normal">VCSL 实录 · 常规</option>
+              <option value="vcsl-soft">VCSL 实录 · 柔和</option>
+              <option value="vcsl-vib">VCSL 实录 · 颤音</option>
               <option value="synth">合成音</option>
             </select></label
           ><label class="volume-label"
@@ -241,7 +319,7 @@
             accept=".json,.txt"
         /></label>
         <p class="tiny">
-          [1] 高音 · (1) 低音 · #1 推键 · 0 休止；空格只作视觉分组。JSON
+          [1] 高音 · (1) 低音 · #1 推键 · 0 休止；导入文字中的空格只作分组。JSON
           保留准确音长。
         </p>
         <div id="import-error" class="error" role="alert"></div>
@@ -302,9 +380,10 @@
           /></label>
         </div>
         <p class="tiny">
-          Z / C 类按键只在谱面聚焦时生效；按住 Shift 可细调。空格分组，0
-          休止，方向键移动光标，Backspace / Delete 删除。Ctrl+S 保存，Ctrl+Z
-          撤销。
+          Z / C 类按键只在谱面聚焦时生效，按标准音长步进；按住 Shift
+          可加入附点。空格插入四分休止（1 拍），选区后追加且不覆盖；0
+          也可输入休止。方向键移动光标，Backspace / Delete 删除。Ctrl+S
+          保存，Ctrl+Z 撤销。
         </p>
         <div id="settings-error" class="error" role="alert"></div>
         <div class="dialog-actions">
