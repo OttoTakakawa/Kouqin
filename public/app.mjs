@@ -25,6 +25,7 @@ const defaults = {
   volume: 55,
   zoom: 100,
   theme: "ink",
+  lyrics: true,
   sidebarCollapsed: false,
   foldedCategories: [],
 };
@@ -95,7 +96,9 @@ function persistPreferences() {
 function applyPreferences() {
   document.body.dataset.theme = prefs.theme;
   document.body.classList.toggle("no-effects", !prefs.effects);
+  document.body.classList.toggle("lyrics-off", !prefs.lyrics);
   document.body.classList.toggle("sidebar-collapsed", !!prefs.sidebarCollapsed);
+  $("#lyrics-toggle")?.setAttribute("aria-pressed", String(!!prefs.lyrics));
   updateLibraryToggle();
   document.documentElement.style.setProperty("--zoom", prefs.zoom / 100);
   $("#effects").checked = prefs.effects;
@@ -626,6 +629,8 @@ function renderEditor() {
     lineEnd.setAttribute("aria-label", `定位第 ${lineNo + 1} 行末尾`);
     lineEnd.title = "点击后可在本行末尾输入或粘贴；点击行号选择整行";
     row.append(lineEnd);
+    const lyricText = score.lyrics?.[lineNo];
+    if (lyricText) row.append(element("span", "lyric", lyricText));
     root.append(row);
   }
   root.scrollTop = scroll;
@@ -635,6 +640,10 @@ function renderEditor() {
       ?.classList.add("playing");
   $("#note-count").textContent =
     `${score.notes.filter((n) => n.type === "note").length} 个音符 · ${lines.length} 句`;
+  document.body.classList.toggle(
+    "show-lyrics",
+    Array.isArray(score.lyrics) && score.lyrics.some((t) => t && t.trim()),
+  );
   updateDuration();
 }
 function focusScore() {
@@ -1792,6 +1801,62 @@ $("#loop-phrase").onclick = () => {
   refreshScoreSelection();
   if (!active) startPlayback().catch((err) => toast(err.message));
 };
+
+/* ---------- 歌词：手动录一句一行，练习模式可选显示 ---------- */
+function lyricLines() {
+  const lines = [];
+  let start = 0;
+  for (let i = 0; i <= score.notes.length; i++)
+    if (i === score.notes.length || score.notes[i].type === "break") {
+      lines.push({ start, end: i });
+      start = i + 1;
+    }
+  return lines;
+}
+function renderLyricsEditor() {
+  const root = $("#lyrics-list");
+  root.replaceChildren();
+  lyricLines().forEach((line, index) => {
+    const row = element("label");
+    const input = element("input");
+    input.type = "text";
+    input.maxLength = 120;
+    input.value = score.lyrics?.[index] ?? "";
+    input.placeholder = "这一句的歌词，可留空";
+    input.setAttribute("aria-label", `第 ${index + 1} 句歌词`);
+    row.append(
+      element("span", "line-index", String(index + 1).padStart(2, "0")),
+      input,
+    );
+    root.append(row);
+  });
+}
+$("#lyrics-toggle").onclick = () => {
+  prefs.lyrics = !prefs.lyrics;
+  persistPreferences();
+  applyPreferences();
+  toast(prefs.lyrics ? "歌词已显示。" : "歌词已隐藏。");
+};
+$("#lyrics-open").onclick = () => {
+  if (original) return;
+  renderLyricsEditor();
+  $("#lyrics-dialog").showModal();
+};
+$("#lyrics-form").onsubmit = (event) => {
+  event.preventDefault();
+  if (original) return;
+  const next = [...$("#lyrics-list").querySelectorAll("input")].map((input) =>
+    input.value.trim(),
+  );
+  $("#lyrics-dialog").close();
+  const current = Array.isArray(score.lyrics) ? score.lyrics : [];
+  if (JSON.stringify(next) === JSON.stringify(current)) return;
+  change(() => {
+    if (next.some(Boolean)) score.lyrics = next;
+    else delete score.lyrics;
+  });
+  toast(next.some(Boolean) ? "歌词已保存。" : "歌词已清空。");
+};
 $("#loop-selection").onclick = () => {
   const items = selectedNotes();
   if (!items.length || original) return;
@@ -1912,6 +1977,14 @@ player.onFrame = (time, duration, index) => {
   if (index >= 0) {
     const node = $(`.note[data-index="${index}"]`);
     node?.classList.add("playing");
+    // 当前句跟着播放走，练习模式才知道「现在读到哪」
+    const row = node?.closest(".phrase");
+    if (row && !row.classList.contains("current")) {
+      document
+        .querySelectorAll(".phrase.current")
+        .forEach((r) => r.classList.remove("current"));
+      row.classList.add("current");
+    }
     if (practice) node?.scrollIntoView({ block: "nearest", behavior: "auto" });
     else centerPlaybackRow();
   }
@@ -2137,6 +2210,7 @@ function configureSimpleLayout() {
     $(".duration-scale-control"),
     $("#play-position"),
     $("#loop-phrase"),
+    $("#lyrics-toggle"),
     follow,
     practiceMenu.details,
     $("#voice").closest("label"),

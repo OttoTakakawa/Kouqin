@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Harmonica</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="head">
+        <img class="logo" src="icons/icon128.png" alt="" />
+        <div class="title">
+          <h1>Harmonica</h1>
+          <p>口琴写谱台</p>
+        </div>
+        <span class="dot" id="dot" aria-hidden="true"></span>
+      </header>
+
+      <p class="state" id="state" aria-live="polite">正在检查本机服务…</p>
+
+      <button class="primary" id="go" type="button" disabled>
+        正在检查…
+      </button>
+
+      <div class="row">
+        <label for="port">端口</label>
+        <input
+          id="port"
+          type="text"
+          inputmode="numeric"
+          maxlength="5"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="ghost" id="recheck" type="button" title="重新检查">
+          重新检查
+        </button>
+      </div>
+
+      <p class="hint" id="hint">
+        服务没开时，会通过 <code>harmonica://</code> 协议自动拉起。
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Harmonica">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#33475c" />
+      <stop offset="1" stop-color="#16212c" />
+    </linearGradient>
+    <linearGradient id="reed" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6ebfc" />
+      <stop offset="1" stop-color="#7fb0d6" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#plate)" />
+  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="none" stroke="#ffffff" stroke-opacity="0.14" />
+  <g fill="url(#reed)">
+    <rect x="12" y="24" width="4" height="16" rx="2" />
+    <rect x="21" y="19" width="4" height="26" rx="2" />
+    <rect x="30" y="15" width="4" height="34" rx="2" />
+    <rect x="39" y="19" width="4" height="26" rx="2" />
+    <rect x="48" y="24" width="4" height="16" rx="2" />
+  </g>
+</svg>

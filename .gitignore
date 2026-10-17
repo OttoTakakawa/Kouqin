@@ -18,3 +18,5 @@ outputs/
 Thumbs.db
 playwright-report/
 test-results/
+tools/webui-launcher/launcher.json
+tools/webui-launcher/logs/

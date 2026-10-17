@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#202629" />
     <title>Harmonica · 口琴写谱台</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
@@ -182,6 +182,7 @@
           <div id="keyboard-help" class="keyboard edit-only"></div>
           <div class="document-actions edit-only">
             <button id="export" class="text-button">导出 JSON</button
+            ><button id="lyrics-open" class="text-button">编辑歌词</button
             ><button id="restore-archive" class="text-button" hidden>
               恢复此版本</button
             ><button id="delete" class="text-button">删除乐谱</button
@@ -235,6 +236,14 @@
           </div>
           <button id="loop-phrase" class="text-button" aria-pressed="false">
             循环本行
+          </button>
+          <button
+            id="lyrics-toggle"
+            class="text-button lyrics-toggle"
+            aria-pressed="true"
+            title="显示或隐藏歌词（只在练习模式）"
+          >
+            歌词
           </button>
           <select id="scope" aria-label="播放范围">
             <option value="all">整首</option>
@@ -389,6 +398,24 @@
         <div class="dialog-actions">
           <button type="button" id="reset-keys" class="subtle">恢复默认</button
           ><button class="primary" type="submit">保存设置</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="lyrics-dialog">
+      <form id="lyrics-form">
+        <div class="dialog-heading">
+          <h2>歌词</h2>
+          <button type="button" class="icon close-dialog" aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <p>
+          每句一行，留空就不显示。歌词只在练习模式出现，可以随时用底部「歌词」关掉。
+        </p>
+        <div id="lyrics-list" class="lyrics-list"></div>
+        <div class="dialog-actions">
+          <button type="button" class="subtle close-dialog">取消</button
+          ><button class="primary" type="submit">保存歌词</button>
         </div>
       </form>
     </dialog>

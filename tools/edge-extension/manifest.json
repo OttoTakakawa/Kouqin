@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Harmonica 快捷入口",
+  "short_name": "Harmonica",
+  "version": "1.0.0",
+  "description": "一键打开本机 Harmonica 口琴写谱台；服务没开时用 harmonica:// 协议把它拉起来。",
+  "minimum_chrome_version": "110",
+  "action": {
+    "default_title": "打开 Harmonica",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"]
+}

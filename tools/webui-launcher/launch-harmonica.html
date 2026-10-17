@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a2632" />
+    <title>Harmonica · 启动</title>
+    <link rel="icon" href="../../public/favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          "Inter", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei",
+          "PingFang SC", system-ui, sans-serif;
+        --ink: #f2f6fa;
+        --muted: #9fb0c0;
+        --faint: #6f8194;
+        --brand: #a8c6de;
+        --accent: #7fb3d9;
+        --card: #1e2b38;
+        --line: #ffffff14;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        min-width: 280px;
+        min-height: 100%;
+        margin: 0;
+      }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 26px;
+        color: var(--ink);
+        background:
+          radial-gradient(120% 70% at 22% 0%, #2f455a 0, transparent 58%),
+          radial-gradient(90% 60% at 88% 100%, #243a4c 0, transparent 60%),
+          #141e27;
+      }
+      .card {
+        width: min(430px, 100%);
+        padding: 34px 30px 26px;
+        text-align: center;
+        background: color-mix(in srgb, var(--card) 94%, #fff 6%);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        box-shadow:
+          0 26px 70px #00000059,
+          inset 0 1px 0 #ffffff0d;
+      }
+      .logo {
+        display: block;
+        width: 66px;
+        height: 66px;
+        margin: 0 auto 16px;
+        border-radius: 16px;
+        filter: drop-shadow(0 10px 22px #0000004d);
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+        font-weight: 650;
+        letter-spacing: -0.3px;
+      }
+      .description {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.75;
+      }
+      .status {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin: 26px 0 6px;
+        font-size: 13px;
+        color: #dbe7f1;
+      }
+      .spinner {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+        border: 2px solid #3f5568;
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+      .spinner[hidden] {
+        display: none;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .endpoint {
+        margin: 0 0 20px;
+        font-size: 11px;
+        color: var(--faint);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.3px;
+      }
+      .actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 9px;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 10px;
+        padding: 11px 18px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          filter 0.15s ease,
+          background 0.15s ease,
+          transform 0.15s ease;
+      }
+      button:hover {
+        filter: brightness(1.08);
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      .primary {
+        background: linear-gradient(180deg, #cfe3f3, #a8c6de);
+        color: #16232e;
+      }
+      .secondary {
+        background: #2a3a49;
+        color: #d5e2ec;
+        box-shadow: inset 0 0 0 1px #ffffff10;
+      }
+      .hint {
+        min-height: 17px;
+        margin: 18px 0 0;
+        color: var(--faint);
+        font-size: 11.5px;
+        line-height: 1.7;
+      }
+      .hint code {
+        font: inherit;
+        color: var(--brand);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation-duration: 2.4s;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card" aria-live="polite">
+      <img class="logo" src="../../public/favicon.svg" alt="" />
+      <h1>Harmonica</h1>
+      <p class="description">正在连接本机写谱台，准备好后会自动进入。</p>
+      <div class="status">
+        <span class="spinner" id="spinner" aria-hidden="true"></span
+        ><span id="status">正在启动 Harmonica…</span>
+      </div>
+      <p class="endpoint" id="endpoint"></p>
+      <div class="actions">
+        <button class="primary" id="open" type="button">打开写谱台</button>
+        <button class="secondary" id="retry" type="button">重新启动</button>
+      </div>
+      <p class="hint" id="hint">
+        如果 Edge 询问是否打开 Harmonica，请选择“允许”。
+      </p>
+    </main>
+    <script>
+      (() => {
+        const params = new URLSearchParams(location.search);
+        const port = /^\d{1,5}$/.test(params.get("port") || "")
+          ? params.get("port")
+          : "4317";
+        const origin = `http://127.0.0.1:${port}`;
+        const appUrl = `${origin}/`;
+        const probeUrl = `${origin}/favicon.svg`;
+
+        const statusEl = document.getElementById("status");
+        const hintEl = document.getElementById("hint");
+        const spinner = document.getElementById("spinner");
+        document.getElementById("endpoint").textContent = appUrl;
+
+        const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+        let protocolRequested = false;
+        let attempts = 0;
+        let polling = false;
+
+        /** 用图片探测：服务没起时连接被拒会触发 onerror，不需要跨域权限。 */
+        function probe() {
+          return new Promise((resolve) => {
+            const img = new Image();
+            let settled = false;
+            const finish = (ok) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              img.onload = null;
+              img.onerror = null;
+              resolve(ok);
+            };
+            const timer = setTimeout(() => finish(false), 1600);
+            img.onload = () => finish(true);
+            img.onerror = () => finish(false);
+            img.src = `${probeUrl}?launcher=${Date.now()}`;
+          });
+        }
+
+        function requestStart() {
+          if (protocolRequested) return;
+          protocolRequested = true;
+          location.href = `harmonica://launch?port=${port}`;
+        }
+
+        function enter() {
+          statusEl.textContent = "写谱台已就绪，正在打开…";
+          hintEl.textContent = "正在切换到 Harmonica。";
+          spinner.hidden = true;
+          location.replace(appUrl);
+        }
+
+        async function waitForApp() {
+          if (polling) return;
+          polling = true;
+          while (polling) {
+            if (await probe()) {
+              polling = false;
+              enter();
+              return;
+            }
+            attempts += 1;
+            if (attempts === 8) {
+              statusEl.textContent = "仍在等待本机服务…";
+              hintEl.textContent =
+                "首次启动可能需要几秒；也可以先运行 run-harmonica-no-browser.bat。";
+            }
+            if (attempts === 24) {
+              statusEl.textContent = "没有等到本机服务";
+              hintEl.innerHTML =
+                "服务没有启动。请双击 <code>run-harmonica-no-browser.bat</code>，再点“重新启动”。";
+              spinner.hidden = true;
+              polling = false;
+              return;
+            }
+            await delay(1200);
+          }
+        }
+
+        document.getElementById("open").addEventListener("click", async () => {
+          if (await probe()) {
+            enter();
+            return;
+          }
+          spinner.hidden = true;
+          statusEl.textContent = "服务还没启动";
+          hintEl.innerHTML =
+            "请先双击 <code>run-harmonica-no-browser.bat</code>，或点“重新启动”。";
+        });
+
+        document.getElementById("retry").addEventListener("click", () => {
+          protocolRequested = false;
+          attempts = 0;
+          spinner.hidden = false;
+          statusEl.textContent = "正在启动 Harmonica…";
+          hintEl.textContent = "如果 Edge 询问是否打开 Harmonica，请选择“允许”。";
+          requestStart();
+          void waitForApp();
+        });
+
+        void (async () => {
+          if (await probe()) {
+            enter();
+            return;
+          }
+          requestStart();
+          void waitForApp();
+        })();
+      })();
+    </script>
+  </body>
+</html>
