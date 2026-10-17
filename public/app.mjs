@@ -41,6 +41,7 @@ let score,
   activeOriginal = null;
 let cursor = 0,
   selected = -1,
+  tokenSelected = false,
   range = null,
   dirty = false,
   practice = false,
@@ -55,6 +56,8 @@ let undoStack = [],
   draftProtected = true;
 let playingIndex = -1,
   audioState = "stopped";
+let followPlayback = true,
+  playbackScrollTop = 0;
 const player = new Player();
 const playback = new PlaybackRange();
 let playbackBaseTime = 0;
@@ -110,7 +113,9 @@ function applyPreferences() {
     [k.newline, "换行"],
     ["0", "休止"],
     ["Shift+点击", "多选"],
+    ["拖动 / Shift+方向键", "选择"],
     ["Ctrl+A", "全选"],
+    ["Ctrl+C / X / V", "复制 / 剪切 / 粘贴"],
   ]) {
     const span = element("span");
     span.append(element("kbd", "", key), document.createTextNode(text));
@@ -165,6 +170,7 @@ function change(mutator, { render = true } = {}) {
     score: playback.copyScore(score),
     cursor,
     selected,
+    tokenSelected,
     range: clone(range),
   });
   if (undoStack.length > 60) undoStack.shift();
@@ -189,6 +195,8 @@ function rememberLeave() {
   );
 }
 function openScore(next, { restored = false, changed = false } = {}) {
+  setFollowPlayback(true);
+  tokenSelected = false;
   viewEpoch++;
   player.stop();
   original = null;
@@ -612,6 +620,12 @@ function renderEditor() {
           score.notes.length ? "输入下一句…" : "点击这里，按 1–7 开始写谱。",
         ),
       );
+    const lineEnd = element("button", "line-end edit-only", "行尾");
+    lineEnd.type = "button";
+    lineEnd.tabIndex = -1;
+    lineEnd.setAttribute("aria-label", `定位第 ${lineNo + 1} 行末尾`);
+    lineEnd.title = "点击后可在本行末尾输入或粘贴；点击行号选择整行";
+    row.append(lineEnd);
     root.append(row);
   }
   root.scrollTop = scroll;
@@ -671,6 +685,7 @@ function refreshScoreSelection() {
   updateDuration();
 }
 $("#score").addEventListener("click", (e) => {
+  tokenSelected = false;
   const lineNumber = e.target.closest(".line-number");
   if (lineNumber) {
     const row = lineNumber.closest(".phrase"),
@@ -684,7 +699,13 @@ $("#score").addEventListener("click", (e) => {
       (practice
         ? playback.cursor === firstNote
         : range?.start === start && range?.end === end);
-    if (firstNote >= 0)
+    if (
+      firstNote >= 0 &&
+      (practice ||
+        followPlayback ||
+        (!player.playing && audioState !== "loading") ||
+        replay)
+    )
       seekPlayback(firstNote, { render: false, restart: !replay });
     if (!practice) {
       range = firstNote >= 0 ? { start, end } : null;
@@ -711,9 +732,14 @@ $("#score").addEventListener("click", (e) => {
             end: Math.max(selected, index) + 1,
           }
         : null;
-    selected = index;
-    cursor = index;
-    if (!e.shiftKey) seekPlayback(index, { render: false });
+    selected = e.shiftKey && selected >= 0 ? selected : index;
+    cursor = range ? (index === range.start ? range.start : range.end) : index;
+    tokenSelected = !e.shiftKey;
+    if (
+      !e.shiftKey &&
+      (followPlayback || (!player.playing && audioState !== "loading"))
+    )
+      seekPlayback(index, { render: false });
   } else {
     const row = e.target.closest(".phrase");
     if (!row) return;
@@ -731,7 +757,13 @@ $("#score").addEventListener("click", (e) => {
 });
 $("#score").addEventListener("dblclick", (e) => {
   const target = e.target.closest(".note");
-  if (target && !e.shiftKey) startPlayback().catch((err) => toast(err.message));
+  if (target && !e.shiftKey) {
+    seekPlayback(Number(target.dataset.index), {
+      render: false,
+      restart: false,
+    });
+    startPlayback().catch((err) => toast(err.message));
+  }
 });
 function insert(notes, { replaceSelection = true } = {}) {
   const start = range ? (replaceSelection ? range.start : range.end) : cursor,
@@ -740,6 +772,7 @@ function insert(notes, { replaceSelection = true } = {}) {
     return toast("每首最多 20,000 个音符和分隔符。");
   change(() => {
     score.notes.splice(start, count, ...notes);
+    tokenSelected = false;
     cursor = start + notes.length;
     selected =
       notes.length && ["note", "space"].includes(notes.at(-1).type)
@@ -827,11 +860,12 @@ function undo(redo = false) {
     score: playback.copyScore(score),
     cursor,
     selected,
+    tokenSelected,
     range: clone(range),
   });
   const snapshot = from.pop();
   const previousNotes = score.notes;
-  ({ score, cursor, selected, range } = snapshot);
+  ({ score, cursor, selected, tokenSelected, range } = snapshot);
   playback.rebase(previousNotes, score.notes);
   dirty = true;
   version++;
@@ -910,7 +944,12 @@ $("#score").addEventListener("keydown", (e) => {
   }
   if (key.startsWith("arrow") || e.key === "Home" || e.key === "End") {
     e.preventDefault();
-    range = null;
+    const anchor = range
+      ? cursor === range.start
+        ? range.end
+        : range.start
+      : cursor;
+    tokenSelected = false;
     if (e.key === "ArrowLeft") cursor = Math.max(0, cursor - 1);
     if (e.key === "ArrowRight")
       cursor = Math.min(score.notes.length, cursor + 1);
@@ -926,6 +965,10 @@ $("#score").addEventListener("keydown", (e) => {
         : score.notes[cursor - 1]?.type === "note"
           ? cursor - 1
           : -1;
+    range =
+      e.shiftKey && cursor !== anchor
+        ? { start: Math.min(anchor, cursor), end: Math.max(anchor, cursor) }
+        : null;
     renderEditor();
     $("#score .caret")?.scrollIntoView({ block: "nearest" });
     return;
@@ -974,45 +1017,228 @@ $("#score").addEventListener("keydown", (e) => {
   }
   if (e.key === "Backspace" || e.key === "Delete") {
     e.preventDefault();
-    let start = range?.start ?? (e.key === "Backspace" ? cursor - 1 : cursor),
+    let start =
+        range?.start ??
+        (tokenSelected
+          ? selected
+          : e.key === "Backspace"
+            ? cursor - 1
+            : cursor),
       count = range ? range.end - range.start : 1;
     if (start < 0 || start >= score.notes.length) return;
     change(() => {
       score.notes.splice(start, count);
+      tokenSelected = false;
       cursor = start;
       selected = score.notes[start]?.type === "note" ? start : -1;
       range = null;
     });
   }
 });
-$("#score").addEventListener("copy", (e) => {
-  const notes = range
-    ? score.notes.slice(range.start, range.end)
-    : selected >= 0
-      ? [score.notes[selected]]
-      : [];
+const clipboardType = "application/x-harmonica-notes";
+let copiedNotes = null;
+function copySelection() {
+  return clone(
+    range
+      ? score.notes.slice(range.start, range.end)
+      : selected >= 0
+        ? [score.notes[selected]]
+        : [],
+  );
+}
+function rememberCopy(notes) {
+  copiedNotes = { text: serializeNotation(notes), notes: clone(notes) };
+  return copiedNotes.text;
+}
+function removeCopiedSelection() {
+  const start = range?.start ?? selected,
+    count = range ? range.end - range.start : 1;
+  if (start < 0 || !count) return;
+  change(() => {
+    score.notes.splice(start, count);
+    cursor = start;
+    selected = -1;
+    tokenSelected = false;
+    range = null;
+  });
+  focusScore();
+}
+function pasteNotes(data, text) {
+  if (practice || original) return;
+  const notes = data
+    ? JSON.parse(data)
+    : copiedNotes && copiedNotes.text === text
+      ? clone(copiedNotes.notes)
+      : parseNotation(text);
+  validateScore({ ...score, notes });
+  if (!notes.length) return toast("剪贴板中没有可粘贴的音符。");
+  insert(notes);
+}
+function copyEvent(e, cut = false) {
+  if (cut && (practice || original)) return;
+  const notes = copySelection();
   if (!notes.length) return;
   e.preventDefault();
-  e.clipboardData.setData("text/plain", serializeNotation(notes));
-  e.clipboardData.setData(
-    "application/x-harmonica-notes",
-    JSON.stringify(notes),
-  );
-});
+  e.clipboardData.setData("text/plain", rememberCopy(notes));
+  e.clipboardData.setData(clipboardType, JSON.stringify(notes));
+  if (cut) removeCopiedSelection();
+}
+$("#score").addEventListener("copy", (e) => copyEvent(e));
+$("#score").addEventListener("cut", (e) => copyEvent(e, true));
 $("#score").addEventListener("paste", (e) => {
   if (practice || original) return;
   e.preventDefault();
   try {
-    const data = e.clipboardData.getData("application/x-harmonica-notes");
-    const notes = data
-      ? JSON.parse(data)
-      : parseNotation(e.clipboardData.getData("text/plain"));
-    validateScore({ ...score, notes });
-    insert(notes);
+    pasteNotes(
+      e.clipboardData.getData(clipboardType),
+      e.clipboardData.getData("text/plain"),
+    );
   } catch (err) {
     toast(err.message);
   }
 });
+
+function clipboardPosition() {
+  return JSON.stringify({
+    viewEpoch,
+    version,
+    cursor,
+    selected,
+    range,
+    practice,
+    original: !!original,
+  });
+}
+async function writeClipboardNotes(notes) {
+  const text = serializeNotation(notes),
+    richType = `web ${clipboardType}`;
+  if (globalThis.ClipboardItem?.supports?.(richType)) {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/plain": new Blob([text], { type: "text/plain" }),
+        [richType]: new Blob([JSON.stringify(notes)], { type: clipboardType }),
+      }),
+    ]);
+  } else await navigator.clipboard.writeText(text);
+  rememberCopy(notes);
+}
+async function readClipboardNotes() {
+  if (!navigator.clipboard.read)
+    return { text: await navigator.clipboard.readText(), data: "" };
+  const items = await navigator.clipboard.read(),
+    richType = `web ${clipboardType}`;
+  for (const item of items) {
+    if (item.types.includes(richType))
+      return { data: await (await item.getType(richType)).text(), text: "" };
+  }
+  for (const item of items) {
+    if (item.types.includes("text/plain"))
+      return {
+        text: await (await item.getType("text/plain")).text(),
+        data: "",
+      };
+  }
+  return { text: "", data: "" };
+}
+async function clipboardAction(action) {
+  if (practice || original) return;
+  focusScore();
+  const position = clipboardPosition();
+  try {
+    if (action === "paste") {
+      const { data, text } = await readClipboardNotes();
+      if (position !== clipboardPosition())
+        return toast("粘贴位置已改变，请在目标位置重新粘贴。");
+      pasteNotes(data, text);
+    } else {
+      const notes = copySelection();
+      if (!notes.length) return toast("请先选择要复制的音符。");
+      await writeClipboardNotes(notes);
+      if (action === "cut") {
+        if (position !== clipboardPosition())
+          return toast("已复制；选区已改变，未删除原音符。");
+        removeCopiedSelection();
+      }
+      toast(
+        action === "cut"
+          ? "已剪切，可在目标位置粘贴。"
+          : "已复制，保留音长与换行。",
+      );
+    }
+  } catch (err) {
+    const key = { copy: "C", cut: "X", paste: "V" }[action];
+    toast(
+      err.name === "NotAllowedError" || err instanceof TypeError
+        ? `无法访问剪贴板，请点击谱面后按 Ctrl+${key}。`
+        : err.message,
+    );
+  }
+}
+
+// Token buttons have no native text selection, so keep drag selection in score coordinates.
+let dragSelection = null,
+  suppressScoreClick = false;
+$("#score").addEventListener("pointerdown", (e) => {
+  const token = e.target.closest("[data-index]");
+  if (
+    practice ||
+    original ||
+    e.button !== 0 ||
+    !token ||
+    e.pointerType === "touch"
+  )
+    return;
+  suppressScoreClick = false;
+  dragSelection = {
+    index: Number(token.dataset.index),
+    x: e.clientX,
+    y: e.clientY,
+    moved: false,
+  };
+});
+document.addEventListener("pointermove", (e) => {
+  if (!dragSelection || !(e.buttons & 1)) return;
+  if (
+    !dragSelection.moved &&
+    Math.hypot(e.clientX - dragSelection.x, e.clientY - dragSelection.y) < 5
+  )
+    return;
+  const token = document
+    .elementFromPoint(e.clientX, e.clientY)
+    ?.closest("#score [data-index]");
+  if (!token) return;
+  dragSelection.moved = true;
+  const index = Number(token.dataset.index);
+  range = {
+    start: Math.min(dragSelection.index, index),
+    end: Math.max(dragSelection.index, index) + 1,
+  };
+  selected = dragSelection.index;
+  cursor = index < dragSelection.index ? range.start : range.end;
+  tokenSelected = false;
+  window.getSelection()?.removeAllRanges();
+  refreshScoreSelection();
+});
+document.addEventListener("pointerup", () => {
+  if (dragSelection?.moved) {
+    suppressScoreClick = true;
+    focusScore();
+  }
+  dragSelection = null;
+});
+document.addEventListener("pointercancel", () => {
+  dragSelection = null;
+});
+$("#score").addEventListener(
+  "click",
+  (e) => {
+    if (!suppressScoreClick) return;
+    suppressScoreClick = false;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  },
+  true,
+);
 
 function convertedScore(item) {
   return nativeScores.find((s) => {
@@ -1425,6 +1651,7 @@ function setMode(value) {
   $("#edit-mode").classList.toggle("active", !value);
   $("#practice-mode").classList.toggle("active", value);
   renderEditor();
+  updatePlaybackScrollSpace();
 }
 $("#edit-mode").onclick = () => setMode(false);
 $("#practice-mode").onclick = () => setMode(true);
@@ -1596,8 +1823,69 @@ function clock(seconds) {
     String(value % 60).padStart(2, "0")
   );
 }
+function setFollowPlayback(value) {
+  followPlayback = value;
+  const button = $("#follow-playback");
+  if (!button) return;
+  button.textContent = value ? "跟随播放" : "回到播放行";
+  button.setAttribute("aria-pressed", String(value));
+}
+function updatePlaybackScrollSpace() {
+  const root = $("#score"),
+    active = !practice && ["loading", "playing", "paused"].includes(audioState),
+    before = parseFloat(getComputedStyle(root, "::before").height) || 0,
+    scroll = root.scrollTop;
+  root.style.setProperty("--score-viewport", `${root.clientHeight}px`);
+  root.classList.toggle("playback-scrolling", active);
+  const after = parseFloat(getComputedStyle(root, "::before").height) || 0;
+  root.scrollTop = scroll + after - before;
+  playbackScrollTop = root.scrollTop;
+}
+function centerPlaybackRow() {
+  if (practice || !followPlayback || playingIndex < 0) return;
+  const root = $("#score"),
+    row = root
+      .querySelector(`.note[data-index="${playingIndex}"]`)
+      ?.closest(".phrase");
+  if (!row) return;
+  const viewport = root.getBoundingClientRect(),
+    bounds = row.getBoundingClientRect();
+  root.scrollTop +=
+    bounds.top -
+    viewport.top -
+    root.clientTop +
+    (bounds.height - root.clientHeight) / 2;
+  playbackScrollTop = root.scrollTop;
+}
+const scoreViewport = $("#score");
+function suspendPlaybackFollow() {
+  if (!practice && ["playing", "loading", "paused"].includes(audioState))
+    setFollowPlayback(false);
+}
+scoreViewport.addEventListener("wheel", suspendPlaybackFollow, {
+  passive: true,
+});
+scoreViewport.addEventListener("touchstart", suspendPlaybackFollow, {
+  passive: true,
+});
+scoreViewport.addEventListener("pointerdown", (e) => {
+  if (e.target === scoreViewport) suspendPlaybackFollow();
+});
+scoreViewport.addEventListener(
+  "scroll",
+  () => {
+    if (Math.abs(scoreViewport.scrollTop - playbackScrollTop) > 2)
+      suspendPlaybackFollow();
+  },
+  { passive: true },
+);
+new ResizeObserver(() => {
+  updatePlaybackScrollSpace();
+  if (player.playing) centerPlaybackRow();
+}).observe(scoreViewport);
 player.onState = (state) => {
   audioState = state;
+  updatePlaybackScrollSpace();
   $("#play").textContent =
     state === "loading"
       ? "加载音色…"
@@ -1624,7 +1912,8 @@ player.onFrame = (time, duration, index) => {
   if (index >= 0) {
     const node = $(`.note[data-index="${index}"]`);
     node?.classList.add("playing");
-    node?.scrollIntoView({ block: "nearest", behavior: "auto" });
+    if (practice) node?.scrollIntoView({ block: "nearest", behavior: "auto" });
+    else centerPlaybackRow();
   }
 };
 async function togglePlay() {
@@ -1692,6 +1981,26 @@ function configureSimpleLayout() {
   }
   const tools = $(".note-tools"),
     advanced = menu("note-more", "更多", "note-menu");
+  const newline = element("button", "small", "换行");
+  newline.id = "insert-newline";
+  newline.type = "button";
+  newline.title = "在光标处换行，也可按 Enter（可在设置中更改）";
+  newline.onclick = () => insert([{ type: "break" }]);
+  const clipboardTools = element("div", "clipboard-tools");
+  clipboardTools.setAttribute("role", "group");
+  clipboardTools.setAttribute("aria-label", "剪贴板操作");
+  for (const [action, title, key] of [
+    ["copy", "复制", "C"],
+    ["cut", "剪切", "X"],
+    ["paste", "粘贴", "V"],
+  ]) {
+    const button = element("button", "small", title);
+    button.id = `${action}-notes`;
+    button.type = "button";
+    button.title = `${title} Ctrl+${key}`;
+    button.onclick = () => clipboardAction(action);
+    clipboardTools.append(button);
+  }
   const exact = element("details", "exact-tools");
   exact.id = "exact-note-tools";
   exact.append(element("summary", "", "精确设置（可选）"));
@@ -1800,31 +2109,39 @@ function configureSimpleLayout() {
     advanced.details,
     $("#undo"),
     $("#redo"),
+    clipboardTools,
+    newline,
   );
   exactBody.querySelectorAll(".tool-spacer").forEach((n) => n.remove());
   const footer = $(".transport"),
-    settings = menu("playback-settings", "播放设置"),
     practiceMenu = menu("practice-tools", "片段练习");
-  const oldFooter = [...footer.childNodes];
-  footer.append(settings.details, practiceMenu.details);
-  settings.panel.append(...oldFooter);
+  const follow = element("button", "text-button edit-only", "跟随播放");
+  follow.id = "follow-playback";
+  follow.type = "button";
+  follow.setAttribute("aria-pressed", "true");
+  follow.title = "手动滚动后暂停跟随；点击回到播放行并恢复居中";
+  follow.onclick = () => {
+    setFollowPlayback(!followPlayback);
+    centerPlaybackRow();
+  };
   const rangeTools = $(".playback-range-controls");
   practiceMenu.panel.append(
     rangeTools,
     $("#scope"),
     $("#loop").closest("label"),
   );
-  settings.panel
-    .querySelectorAll(".transport-divider")
-    .forEach((n) => n.remove());
+  footer.querySelectorAll(".transport-divider").forEach((n) => n.remove());
   $(".duration-scale-control label").textContent = "播放速度";
   footer.append(
     $(".play-controls"),
     $(".duration-scale-control"),
     $("#play-position"),
     $("#loop-phrase"),
+    follow,
     practiceMenu.details,
-    settings.details,
+    $("#voice").closest("label"),
+    $("#volume").closest("label"),
+    $("#effects").closest("label"),
   );
   const keyboard = $("#keyboard-help"),
     help = element("details", "writing-help edit-only");

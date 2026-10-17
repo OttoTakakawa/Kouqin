@@ -39,7 +39,7 @@
 
 ## 新增免费 MusyngKite 对照音色
 
-「播放设置 → 音色」现在可选择「口琴 · FluidR3」「口琴 · MusyngKite」或合成音。原有选择保持不变；选择按本机偏好保存，不改变乐谱。两个采样乐器独立缓存，切换或停止会清除所有已加载乐器的发声，避免残音。
+「底部播放栏 → 音色」现在可选择「口琴 · FluidR3」「口琴 · MusyngKite」或合成音。原有选择保持不变；选择按本机偏好保存，不改变乐谱。两个采样乐器独立缓存，切换或停止会清除所有已加载乐器的发声，避免残音。
 
 MusyngKite 文件原样保存在 public/audio；构建时作为纯文本内嵌到本地应用，运行时数据URL加载，兼容已有服务且不访问网络。许可为 CC BY-SA 3.0，完整条款与来源见 THIRD_PARTY_NOTICES.md 和 public/audio/MusyngKite-LICENSE.txt。
 
@@ -49,4 +49,4 @@ MusyngKite 文件原样保存在 public/audio；构建时作为纯文本内嵌�
 
 ## 其余免费音色
 
-新增GeneralUser GS、VCSL常规、柔和、颤音，合计6种口琴采样音色，另保留合成音。都在「播放设置 → 音色」选择并记住偏好，音色切换停止上一种发声。新音色各自有延音循环表；VCSL只转调其9/10个实录采样锚点，不冒充全音区逐音实录。GeneralUser通过FluidSynth完整预设离线渲染88音，运行时不需要安装FluidSynth。完整来源与许可见THIRD_PARTY_NOTICES.md。
+新增GeneralUser GS、VCSL常规、柔和、颤音，合计6种口琴采样音色，另保留合成音。都在「底部播放栏 → 音色」选择并记住偏好，音色切换停止上一种发声。新音色各自有延音循环表；VCSL只转调其9/10个实录采样锚点，不冒充全音区逐音实录。GeneralUser通过FluidSynth完整预设离线渲染88音，运行时不需要安装FluidSynth。完整来源与许可见THIRD_PARTY_NOTICES.md。

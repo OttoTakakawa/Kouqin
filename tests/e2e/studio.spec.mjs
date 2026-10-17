@@ -42,6 +42,400 @@ function note(degree, duration = 1) {
   return { type: "note", degree, octave: 0, sharp: false, duration };
 }
 
+function longScore(lines = 35) {
+  return sample(
+    Array.from({ length: lines }, (_, i) => [
+      ...(i ? [{ type: "break" }] : []),
+      note((i % 7) + 1),
+      note(2),
+      note(3),
+    ]).flat(),
+    240,
+  );
+}
+async function playingRowOffset(page) {
+  return page.locator("#score").evaluate((root) => {
+    const row = root.querySelector(".note.playing")?.closest(".phrase");
+    if (!row) return null;
+    const a = root.getBoundingClientRect(),
+      b = row.getBoundingClientRect();
+    return Math.abs(
+      b.top + b.height / 2 - a.top - root.clientTop - root.clientHeight / 2,
+    );
+  });
+}
+test("编辑播放自动跟随整行居中，首行末行也能居中", async ({ page }) => {
+  await editor(page);
+  await importScore(page, longScore());
+  await page.locator("#voice").selectOption("synth");
+  await page.locator(".note").first().click();
+  await page.locator("#play").click();
+  await expect(page.locator(".note.playing")).toHaveAttribute(
+    "data-index",
+    "0",
+  );
+  await expect.poll(() => playingRowOffset(page)).toBeLessThan(3);
+  await expect
+    .poll(async () =>
+      Number(await page.locator(".note.playing").getAttribute("data-index")),
+    )
+    .toBeGreaterThanOrEqual(4);
+  await expect.poll(() => playingRowOffset(page)).toBeLessThan(3);
+  await expect(page.locator("#follow-playback")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.screenshot({ path: "work/playback-follow-centered.png" });
+  await page.locator("#stop").click();
+  await page.locator(".note").last().click();
+  await page.locator("#play").click();
+  await expect(page.locator(".note.playing")).toHaveAttribute(
+    "data-index",
+    String(34 * 4 + 2),
+  );
+  await expect.poll(() => playingRowOffset(page)).toBeLessThan(3);
+});
+
+test("播放中手动滚动不再被拉回，可选择下方行编辑并主动恢复跟随", async ({
+  page,
+}) => {
+  await editor(page);
+  await importScore(page, longScore());
+  await page.locator("#voice").selectOption("synth");
+  await page.locator(".note").first().click();
+  await page.locator("#play").click();
+  await expect(page.locator(".note.playing")).toHaveCount(1);
+  const viewport = await page.locator("#score").boundingBox();
+  await page.mouse.move(
+    viewport.x + viewport.width / 2,
+    viewport.y + viewport.height / 2,
+  );
+  await page.mouse.wheel(0, 1500);
+  await expect(page.locator("#follow-playback")).toHaveText("回到播放行");
+  await expect
+    .poll(() => page.locator("#score").evaluate((n) => n.scrollTop))
+    .toBeGreaterThan(1000);
+  const scroll = await page.locator("#score").evaluate((n) => n.scrollTop);
+  await page.waitForTimeout(900);
+  expect(
+    Math.abs(
+      (await page.locator("#score").evaluate((n) => n.scrollTop)) - scroll,
+    ),
+  ).toBeLessThan(3);
+  const target = page.locator(".phrase").nth(18).locator(".note").first();
+  await page.locator(".line-number").nth(18).click();
+  await expect(page.locator(".note.chosen")).toHaveCount(3);
+  expect(
+    Number(await page.locator(".note.playing").getAttribute("data-index")),
+  ).toBeLessThan(30);
+  await target.click();
+  await expect(target).toHaveClass(/chosen/);
+  await expect(page.locator("#play")).toHaveAttribute("aria-label", "暂停");
+  expect(
+    Number(await page.locator(".note.playing").getAttribute("data-index")),
+  ).toBeLessThan(30);
+  await page.screenshot({ path: "work/playback-follow-manual.png" });
+  await page.locator("#follow-playback").click();
+  await expect.poll(() => playingRowOffset(page)).toBeLessThan(3);
+  await page.locator("#follow-playback").click();
+  await target.click();
+  await page.locator("#duration-feel").selectOption("2");
+  await expect(page.locator("#note-duration")).toHaveText("2");
+  await expect(target).toBeInViewport();
+});
+
+test("点击中间符号后原位删除，连续删除和方向键保持光标位置", async ({
+  page,
+}) => {
+  await editor(page);
+  await importScore(
+    page,
+    sample([note(1), note(0), note(2), note(3), note(4)]),
+  );
+  await page.locator(".pause-token").click();
+  await page.keyboard.press("Backspace");
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "4"]);
+  await expect(page.locator(".caret + .note")).toHaveText("2");
+  await page.keyboard.press("Control+z");
+  await page.locator("#duration-feel").selectOption("2");
+  await page.keyboard.press("Backspace");
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "4"]);
+  await page.keyboard.press("Control+z");
+  await page.locator(".pause-token").click();
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "4"]);
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".note")).toHaveText(["1", "3", "4"]);
+  await page.keyboard.press("2");
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "4"]);
+  await page.locator('.note[data-index="2"]').click();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Backspace");
+  await expect(page.locator(".note")).toHaveText(["2", "3", "4"]);
+});
+
+test("换行按钮和 Enter 在中间分句，退格合并，保存重读保持分句", async ({
+  page,
+  request,
+}) => {
+  await editor(page);
+  await importScore(page, sample([note(1), note(2), note(3), note(4)]));
+  await page.locator('.note[data-index="2"]').click();
+  await page.locator("#insert-newline").click();
+  await expect(page.locator(".phrase")).toHaveCount(2);
+  await expect(page.locator(".phrase").first().locator(".note")).toHaveText([
+    "1",
+    "2",
+  ]);
+  await expect(page.locator(".phrase").last().locator(".note")).toHaveText([
+    "3",
+    "4",
+  ]);
+  await page.keyboard.press("Backspace");
+  await expect(page.locator(".phrase")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".phrase")).toHaveCount(2);
+  await page.keyboard.press("5");
+  await expect(page.locator(".phrase").last().locator(".note")).toHaveText([
+    "5",
+    "3",
+    "4",
+  ]);
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith("/api/scores") && r.request().method() === "POST",
+  );
+  await page.locator("#save").click();
+  expect((await saved).ok()).toBeTruthy();
+  expect((await (await request.get("/api/scores")).json())[0].notes[2]).toEqual(
+    { type: "break" },
+  );
+  await page.reload();
+  await expect(page.locator(".phrase")).toHaveCount(2);
+});
+
+test("音色音量特效直接出现在底栏，窄屏也可操作", async ({ page }) => {
+  await editor(page);
+  await expect(page.locator("#playback-settings")).toHaveCount(0);
+  for (const width of [1440, 1024, 768, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const id of ["voice", "volume", "effects"]) {
+      const control = page.locator(`.transport #${id}`);
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+    }
+    for (const id of [
+      "copy-notes",
+      "cut-notes",
+      "paste-notes",
+      "insert-newline",
+    ]) {
+      const button = page.locator(`#${id}`);
+      await expect(button).toBeVisible();
+      const box = await button.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+    }
+    if (width === 1440 || width === 320)
+      await page.screenshot({ path: `work/clipboard-layout-${width}.png` });
+  }
+});
+
+test("拖选跨行音符后实际复制粘贴，保留音长休止和换行", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await editor(page);
+  await importScore(
+    page,
+    sample([
+      note(1, 0.5),
+      note(0, 2),
+      { type: "break" },
+      { ...note(3, 2), tailHold: 1 },
+      note(4),
+    ]),
+  );
+  const first = await page.locator('.note[data-index="0"]').boundingBox();
+  const last = await page.locator('.note[data-index="3"]').boundingBox();
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(last.x + last.width / 2, last.y + last.height / 2, {
+    steps: 12,
+  });
+  await page.mouse.up();
+  await expect(page.locator(".note.chosen")).toHaveText(["1", "停", "3"]);
+  await page.keyboard.press("Control+c");
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("10\n3");
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".note")).toHaveText(["1", "停", "3"]);
+  await expect(page.locator(".phrase")).toHaveCount(2);
+  await page.locator('.note[data-index="0"]').click();
+  await expect(page.locator("#note-duration")).toHaveText("0.5");
+  await page.locator('.note[data-index="3"]').click();
+  await expect(page.locator("#note-duration")).toHaveText("2");
+  await expect(page.locator(".tail-hold")).toHaveCount(1);
+});
+
+test("Shift方向键选区支持剪切粘贴与撤销，Ctrl+C不缩短音符", async ({
+  page,
+}) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await editor(page);
+  await importScore(page, sample([note(1, 2), note(2), note(3), note(4)]));
+  await page.locator('.note[data-index="1"]').click();
+  await page.keyboard.press("Shift+ArrowRight");
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(page.locator(".note.chosen")).toHaveText(["2", "3"]);
+  await page.keyboard.press("Control+x");
+  await expect(page.locator(".note")).toHaveText(["1", "4"]);
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "4"]);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".note")).toHaveText(["1", "4"]);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "4"]);
+  await page.locator(".note").first().click();
+  await page.keyboard.press("Control+c");
+  await expect(page.locator("#note-duration")).toHaveText("2");
+});
+
+test("剪贴板按钮保留音长，外部多行谱可粘贴，空剪贴板不会清空选区", async ({
+  page,
+}) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await editor(page);
+  await importScore(page, sample([note(1, 0.5), note(2), note(3)]));
+  await page.locator(".note").first().click();
+  await page.locator("#copy-notes").click();
+  await page.keyboard.press("End");
+  await page.locator("#paste-notes").click();
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3", "1"]);
+  await expect(page.locator("#note-duration")).toHaveText("0.5");
+  await page.locator("#cut-notes").click();
+  await expect(page.locator(".note")).toHaveText(["1", "2", "3"]);
+  await page.evaluate(() => navigator.clipboard.writeText("[12]\n(3)#4 0"));
+  await page.keyboard.press("Control+a");
+  await page.locator("#paste-notes").click();
+  await expect(page.locator(".note")).toHaveText([
+    "[1]",
+    "[2]",
+    "(3)",
+    "#4",
+    "停",
+  ]);
+  await expect(page.locator(".phrase")).toHaveCount(2);
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".note")).toHaveCount(5);
+  await page.evaluate(() => navigator.clipboard.writeText("不是数字谱"));
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".note")).toHaveCount(5);
+  await expect(page.locator("#toast")).toContainText("纯谱只接受");
+});
+
+test("剪贴板按钮跨页面保留完整音符，写入失败不删除剪切内容", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await editor(page);
+  await importScore(
+    page,
+    sample([{ ...note(5, 0.5), octave: 1, tailHold: 2 }]),
+  );
+  await page.locator(".note").click();
+  await page.locator("#copy-notes").click();
+  await expect(page.locator("#toast")).toContainText("已复制");
+  const other = await context.newPage();
+  await editor(other);
+  await other.keyboard.press("Control+a");
+  await other.keyboard.press("Backspace");
+  await expect(other.locator(".note")).toHaveCount(0);
+  await other.locator("#paste-notes").click();
+  await expect(other.locator(".note")).toHaveText("[5]");
+  await expect(other.locator("#note-duration")).toHaveText("0.5");
+  await expect(other.locator(".tail-hold")).toHaveCount(1);
+  await other.evaluate(() => {
+    navigator.clipboard.write = async () => {
+      throw new DOMException("denied", "NotAllowedError");
+    };
+    navigator.clipboard.writeText = navigator.clipboard.write;
+  });
+  await other.locator("#cut-notes").click();
+  await expect(other.locator("#toast")).toContainText("无法访问剪贴板");
+  await expect(other.locator(".note")).toHaveText("[5]");
+});
+
+test("下一整行可复制回上一行末尾、中间或替换上一整行", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await editor(page);
+  await importScore(
+    page,
+    sample([
+      note(1),
+      note(2),
+      { type: "break" },
+      note(3, 0.5),
+      note(0, 2),
+      note(4, 2),
+    ]),
+  );
+  await page.locator(".line-number").nth(1).click();
+  await expect(page.locator(".note.chosen")).toHaveText(["3", "停", "4"]);
+  await page.keyboard.press("Control+c");
+  await page
+    .getByRole("button", { name: "定位第 1 行末尾", exact: true })
+    .click();
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".phrase").first().locator(".note")).toHaveText([
+    "1",
+    "2",
+    "3",
+    "停",
+    "4",
+  ]);
+  await expect(page.locator(".phrase").last().locator(".note")).toHaveText([
+    "3",
+    "停",
+    "4",
+  ]);
+  await expect(page.locator("#note-duration")).toHaveText("2");
+  await page.keyboard.press("Control+z");
+  await page
+    .locator('.note[data-index="1"]')
+    .click({ position: { x: 3, y: 3 } });
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".phrase").first().locator(".note")).toHaveText([
+    "1",
+    "3",
+    "停",
+    "4",
+    "2",
+  ]);
+  await page.keyboard.press("Control+z");
+  await page.locator(".line-number").first().click();
+  await page.locator("#paste-notes").click();
+  await expect(page.locator(".phrase").first().locator(".note")).toHaveText([
+    "3",
+    "停",
+    "4",
+  ]);
+  await expect(page.locator(".phrase").last().locator(".note")).toHaveText([
+    "3",
+    "停",
+    "4",
+  ]);
+  await page.locator(".note").first().click();
+  await expect(page.locator("#note-duration")).toHaveText("0.5");
+});
+
 test("默认只有主入口，归档版本可恢复且保留未保存编辑，原图仍可访问", async ({
   page,
   request,
@@ -197,7 +591,6 @@ test("灰色停可原位设置时长并真正静音，短音字号不同，批�
   await expect(page.locator("#duration-feel")).toHaveValue("2");
   await reveal(page, "#voice");
   await page.locator("#voice").selectOption("synth");
-  await page.locator("#playback-settings > summary").click();
   await page.locator(".note").first().click();
   await page.locator("#play").click();
   await expect(page.locator(".pause-token.playing")).toHaveAttribute(
@@ -449,7 +842,6 @@ test("统一速度兼容旧倍率，预设、撤销和保存不再叠加倍率",
   await expect(speed).toHaveValue("120");
   await reveal(page, "#voice");
   await page.locator("#voice").selectOption("synth");
-  await page.locator("#playback-settings > summary").click();
   await page.locator("#play").click();
   await expect(page.locator("#play")).toHaveAttribute("aria-label", "暂停");
   await expect(page.locator("#play")).toHaveAttribute("aria-label", "播放", {
@@ -467,7 +859,6 @@ test("编辑模式重复点击行号起播，本行循环可编辑且不进入�
   );
   await reveal(page, "#voice");
   await page.locator("#voice").selectOption("synth");
-  await page.locator("#playback-settings > summary").click();
   await page.evaluate(() => {
     window.__heard = [];
     const start = OscillatorNode.prototype.start;
@@ -1047,7 +1438,6 @@ test("免费MusyngKite离线播放、长音延续、切换静音和偏好恢复"
   await importScore(page, sample([note(1, 8)], 120));
   await reveal(page, "#voice");
   await page.locator("#voice").selectOption("musyngkite");
-  await page.locator("#playback-settings > summary").click();
   await page.locator("#play").click();
   await expect(page.locator("#play")).toHaveAttribute("aria-label", "暂停");
   await page.waitForTimeout(3400);
@@ -1158,7 +1548,6 @@ for (const voice of ["generaluser", "vcsl-normal", "vcsl-soft", "vcsl-vib"]) {
     await importScore(page, sample([note(1, 8)], 60));
     await reveal(page, "#voice");
     await page.locator("#voice").selectOption(voice);
-    await page.locator("#playback-settings > summary").click();
     await page.locator("#play").click();
     await expect(page.locator("#play")).toHaveAttribute("aria-label", "暂停");
     await page.waitForTimeout(7350);
