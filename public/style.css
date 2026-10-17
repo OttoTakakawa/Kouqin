@@ -1393,3 +1393,41 @@ body[data-theme="dark"] {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+body:not(.practice) .phrase {
+  --row-inset: 58px;
+  --row-number-left: 15px;
+  --row-number-width: 30px;
+  --row-gap: 3px;
+  align-items: center;
+  gap: var(--row-gap);
+  padding-left: var(--row-inset);
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+body:not(.practice) .phrase::before {
+  content: "";
+  position: static;
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
+  margin-left: calc(3px - var(--row-inset));
+  margin-right: calc(var(--row-number-left) - 14px - var(--row-gap));
+  transform: none;
+}
+body:not(.practice) .phrase .line-number {
+  position: static;
+  flex: 0 0 var(--row-number-width);
+  margin-right: calc(var(--row-inset) - var(--row-number-left) - var(--row-number-width) - var(--row-gap));
+}
+body:not(.practice) .phrase.current::before {
+  content: "▶";
+}
+@media (max-width: 768px) {
+  body:not(.practice) .phrase {
+    --row-inset: 46px;
+    --row-number-left: 12px;
+    --row-number-width: 26px;
+    --row-gap: 1px;
+  }
+}
