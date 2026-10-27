@@ -2,16 +2,11 @@ import { Soundfont } from "smplr";
 import { timeline } from "./model.mjs";
 import harmonicaLoops from "./audio/harmonica-loops-calibrated.json";
 import musyngkiteLoops from "./audio/musyngkite-loops-calibrated.json";
-import musyngkiteSource from "./audio/musyngkite-harmonica-mp3.js";
 
 import generaluserLoops from "./audio/generaluser-loops.json";
-import generaluserSource from "./audio/generaluser-harmonica-mp3.js";
 import vcslNormalLoops from "./audio/vcsl-normal-loops.json";
-import vcslNormalSource from "./audio/vcsl-normal-harmonica-mp3.js";
 import vcslSoftLoops from "./audio/vcsl-soft-loops.json";
-import vcslSoftSource from "./audio/vcsl-soft-harmonica-mp3.js";
 import vcslVibLoops from "./audio/vcsl-vib-loops.json";
-import vcslVibSource from "./audio/vcsl-vib-harmonica-mp3.js";
 
 const sampledVoices = {
   harmonica: {
@@ -20,30 +15,27 @@ const sampledVoices = {
     gain: 20,
   },
   musyngkite: {
-    url:
-      "data:text/plain;charset=utf-8," + encodeURIComponent(musyngkiteSource),
+    url: "/audio/musyngkite-harmonica-mp3.js",
     loops: musyngkiteLoops,
     gain: 20,
   },
   generaluser: {
-    url:
-      "data:text/plain;charset=utf-8," + encodeURIComponent(generaluserSource),
+    url: "/audio/generaluser-harmonica-mp3.js",
     loops: generaluserLoops,
     gain: 20,
   },
   "vcsl-normal": {
-    url:
-      "data:text/plain;charset=utf-8," + encodeURIComponent(vcslNormalSource),
+    url: "/audio/vcsl-normal-harmonica-mp3.js",
     loops: vcslNormalLoops,
     gain: 4.5,
   },
   "vcsl-soft": {
-    url: "data:text/plain;charset=utf-8," + encodeURIComponent(vcslSoftSource),
+    url: "/audio/vcsl-soft-harmonica-mp3.js",
     loops: vcslSoftLoops,
     gain: 8,
   },
   "vcsl-vib": {
-    url: "data:text/plain;charset=utf-8," + encodeURIComponent(vcslVibSource),
+    url: "/audio/vcsl-vib-harmonica-mp3.js",
     loops: vcslVibLoops,
     gain: 3,
   },

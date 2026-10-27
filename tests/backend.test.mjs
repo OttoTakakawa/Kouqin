@@ -181,6 +181,9 @@ test("端到端：读取原谱图片、保存重读、拒绝越界与跨站请�
   });
   const get = async (p) => fetch(address + p);
   assert.equal((await (await get("/api/health")).json()).libraryCount, 1);
+  const health = await (await get("/api/health")).json();
+  assert.equal(health.app, "harmonica-studio");
+  assert.equal(health.dataDirectory, data);
   const list = await (await get("/api/library")).json();
   assert.equal(list.items[0].title, "曲子");
   assert.equal(list.items[0].path, undefined);
@@ -196,25 +199,42 @@ test("端到端：读取原谱图片、保存重读、拒绝越界与跨站请�
   const saved = await (await post(score())).json();
   assert.ok(saved.updatedAt);
   assert.deepEqual(await (await get("/api/scores")).json(), [
-    { ...score(), updatedAt: saved.updatedAt },
+    { ...score(), updatedAt: saved.updatedAt, revision: saved.revision },
   ]);
   assert.equal(await readFile(path.join(library, "曲子.md"), "utf8"), original);
   const edited = { ...score(), title: "修改后的曲子", durationScale: 0.5 };
+  assert.equal((await post(edited)).status, 428);
+  edited.revision = saved.revision;
   const editedResult = await (await post(edited)).json();
   assert.deepEqual(
     JSON.parse(await readFile(path.join(data, "test-score.json"), "utf8")),
-    { ...edited, updatedAt: editedResult.updatedAt },
+    { ...score(), title: edited.title, durationScale: 0.5, updatedAt: editedResult.updatedAt },
   );
   assert.equal(
     JSON.parse(await readFile(path.join(data, "test-score.json.bak"), "utf8"))
       .title,
     "测试曲",
   );
-  const extended = { ...edited, notes: parseNotation("((#1)) (7) [[2]]") };
+  const extended = { ...edited, revision: editedResult.revision, notes: parseNotation("((#1)) (7) [[2]]") };
   assert.equal((await post(extended)).status, 200);
   const extendedReadback = (await (await get("/api/scores")).json())[0];
   assert.deepEqual(extendedReadback.notes, extended.notes);
   assert.equal(serializeNotation(extendedReadback.notes), "((#1)) (7) [[2]]");
+  const target = path.join(data, "test-score.json");
+  const beforeConflict = await readFile(target, "utf8");
+  const bakBeforeConflict = await readFile(target + ".bak", "utf8");
+  assert.equal((await post(edited)).status, 409);
+  assert.equal(await readFile(target, "utf8"), beforeConflict);
+  assert.equal(await readFile(target + ".bak", "utf8"), bakBeforeConflict);
+  // 外部工具即使没有更新 updatedAt，内容变化仍使旧版本失效。
+  await writeFile(target, beforeConflict + "\n");
+  assert.equal((await post(extendedReadback)).status, 409);
+  const latest = (await (await get("/api/scores")).json())[0];
+  const raced = await Promise.all([
+    post({ ...latest, title: "并发甲" }),
+    post({ ...latest, title: "并发乙" }),
+  ]);
+  assert.deepEqual(raced.map((r) => r.status).sort(), [200, 409]);
   assert.equal(
     (await post({ ...extended, notes: [{ ...extended.notes[0], octave: -3 }] })).status,
     400,
@@ -232,6 +252,7 @@ test("端到端：读取原谱图片、保存重读、拒绝越界与跨站请�
     200,
   );
   assert.deepEqual(await (await get("/api/scores")).json(), []);
+  assert.equal((await post(latest)).status, 409);
   assert.equal(await readFile(path.join(library, "曲子.md"), "utf8"), original);
 });
 test("分句、休止与自由时值进入播放时间轴；拒绝不完整 OCR", () => {

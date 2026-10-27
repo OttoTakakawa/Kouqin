@@ -390,9 +390,13 @@ test("下一整行可复制回上一行末尾、中间或替换上一整行", as
   await page.locator(".line-number").nth(1).click();
   await expect(page.locator(".note.chosen")).toHaveText(["3", "停", "4"]);
   await page.keyboard.press("Control+c");
-  await page
-    .getByRole("button", { name: "定位第 1 行末尾", exact: true })
-    .click();
+  await page.locator(".phrase").first().hover();
+  const lineEnd = page.getByRole("button", {
+    name: "定位第 1 行末尾",
+    exact: true,
+  });
+  await expect(lineEnd).toHaveCSS("opacity", "1");
+  await lineEnd.click();
   await page.keyboard.press("Control+v");
   await expect(page.locator(".phrase").first().locator(".note")).toHaveText([
     "1",

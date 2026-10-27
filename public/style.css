@@ -75,8 +75,8 @@
   --font-num:
     "Bahnschrift", "Cascadia Mono", "Segoe UI", "Helvetica Neue", Arial,
     sans-serif;
-  --font-mark: "Noto Serif SC", "Source Han Serif SC", Georgia, "Songti SC",
-    serif;
+  --font-mark:
+    "Noto Serif SC", "Source Han Serif SC", Georgia, "Songti SC", serif;
 
   /* 由脚本写入 */
   --zoom: 1;
@@ -98,8 +98,7 @@ body {
   line-height: 1.6;
   color: var(--ink);
   background:
-    radial-gradient(120% 60% at 78% -10%, #ffffff70, transparent 60%),
-    var(--bg);
+    radial-gradient(120% 60% at 78% -10%, #ffffff70, transparent 60%), var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -441,7 +440,9 @@ kbd {
       transparent 3px 9px
     )
     center / 100% 19px no-repeat;
-  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--side-brand) 45%, transparent));
+  filter: drop-shadow(
+    0 0 7px color-mix(in srgb, var(--side-brand) 45%, transparent)
+  );
 }
 .brand-icon::before {
   content: "";
@@ -1089,7 +1090,10 @@ body:not(.practice) .phrase::before {
 body:not(.practice) .phrase .line-number {
   position: static;
   flex: 0 0 var(--row-number-width);
-  margin-right: calc(var(--row-inset) - var(--row-number-left) - var(--row-number-width) - var(--row-gap));
+  margin-right: calc(
+    var(--row-inset) - var(--row-number-left) - var(--row-number-width) -
+      var(--row-gap)
+  );
 }
 body:not(.practice) .phrase.current::before {
   content: "▶";
@@ -1207,6 +1211,11 @@ body:not(.practice) .phrase.current::before {
 .note.playback-cursor {
   box-shadow: inset 0 -2px var(--accent);
 }
+/* 练习模式不显示起播位置标记：它默认停在第一个音上，
+   看着像「卡住不动的块」。点一下就能定位，不需要这个提示。 */
+.practice .note.playback-cursor {
+  box-shadow: none;
+}
 .note.loop-range {
   background: color-mix(in srgb, var(--accent-light) 55%, transparent);
 }
@@ -1305,6 +1314,22 @@ body:not(.practice) .phrase.current::before {
     inset 0 -3px 0 var(--accent),
     0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent);
   background: var(--accent-light);
+}
+/* 练习模式：播放到哪个数字，靠这一格自己说出来。
+   放大倍数走 --spotlight（设置里「当前音放大」可调），
+   再配一圈描边和一层光，保证一眼能认出来。 */
+.practice .note.playing {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 -2px 0 var(--accent),
+    0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 0 28px color-mix(in srgb, var(--accent) 30%, transparent);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 34%, transparent);
+  transform: scale(var(--spotlight, 1.18));
+  /* 放大后别被左右相邻的音符压住 */
+  z-index: 2;
 }
 .note.playing:after {
   content: "♪";
@@ -1508,25 +1533,166 @@ body:not(.practice) .phrase.current::before {
   font-size: 10px;
   margin-top: 6px;
 }
-.clipboard-tools {
-  display: flex;
+/* 行级动作：固定在最右侧，不再跟着音符左右漂。 */
+.row-actions {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: center;
 }
 .line-end {
   align-self: center;
-  padding: 4px 8px;
-  margin-left: 8px;
+  padding: 3px 9px;
+  margin-left: 0;
   font-size: 10px;
-  color: var(--muted);
+  color: var(--faint);
   background: transparent;
-  border: 1px dashed var(--line);
+  border: 1px dashed color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: var(--r-pill);
   white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--t-fast),
+    color var(--t-fast),
+    border-color var(--t-fast);
+}
+body:not(.practice) .phrase:hover .line-end,
+body:not(.practice) .phrase.current .line-end {
+  opacity: 1;
+  pointer-events: auto;
 }
 .line-end:hover,
 .line-end:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
+  opacity: 1;
+}
+.row-repeat-mark {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--accent) 82%, var(--muted));
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  white-space: nowrap;
+}
+body:not(.practice) .row-repeat-mark {
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+}
+body.practice .row-repeat-mark {
+  margin-left: 10px;
+  color: color-mix(in srgb, var(--accent) 62%, var(--muted));
+  opacity: 0.85;
+}
+.simple-menu.has-value > summary {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+/* 底栏控件统一一种语言：药丸分组、同高、同字号。 */
+.pill {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--sh-xs);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.pill:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.duration-stepper {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--sh-xs);
+  overflow: hidden;
+}
+.duration-stepper button.small {
+  padding: 2px 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 15px;
+}
+.duration-stepper button.small:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.duration-stepper .duration-feel {
+  width: 76px;
+  margin: 0;
+  padding: 5px 4px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.duration-stepper .duration-feel:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.menu-panel button.small {
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.menu-panel button.small.selected {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.clipboard-tools {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--sh-xs);
+  overflow: hidden;
+}
+.clipboard-tools button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.clipboard-tools button + button {
+  box-shadow: inset 1px 0 var(--line);
+}
+.clipboard-tools button:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .writing-help > summary {
   cursor: pointer;
@@ -1971,6 +2137,7 @@ summary {
   display: none;
 }
 .practice #app {
+  position: relative;
   grid-template-columns: 1fr;
 }
 .practice .edit-only {
@@ -1978,6 +2145,17 @@ summary {
 }
 .practice header .menu-toggle {
   display: none;
+}
+.practice-only {
+  display: none;
+}
+.practice .practice-only {
+  display: inline-flex;
+}
+#practice-overview[aria-pressed="true"] {
+  color: var(--accent-deep);
+  background: var(--accent-light);
+  border-color: var(--accent-line);
 }
 
 /* 一束从上方落下的舞台光，把谱面衬出来 */
@@ -1988,8 +2166,7 @@ body.practice {
       color-mix(in srgb, var(--accent) 11%, transparent),
       transparent 72%
     ),
-    radial-gradient(120% 60% at 78% -10%, #ffffff70, transparent 60%),
-    var(--bg);
+    radial-gradient(120% 60% at 78% -10%, #ffffff70, transparent 60%), var(--bg);
 }
 .practice header {
   height: 62px;
@@ -2156,26 +2333,17 @@ body.practice {
   letter-spacing: 0.6px;
   transition: color var(--t-base);
 }
-/* 当前句：一条会发光的记号 */
+/* 当前句不再画竖条：位置靠正在播放的音符本身指出，靠左侧行号做弱提示。 */
 .practice .phrase.current {
   background: none;
   box-shadow: none;
 }
 .practice .phrase.current::before {
-  content: "";
-  position: absolute;
-  left: 1px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 74px;
-  border-radius: 4px;
-  background: linear-gradient(180deg, var(--accent-lift), var(--accent));
-  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 70%, transparent);
+  content: none;
 }
 .practice .phrase.current .line-number {
   color: var(--accent);
-  opacity: 1;
+  opacity: 0.9;
 }
 .practice .phrase:hover {
   background: radial-gradient(
@@ -2198,15 +2366,80 @@ body.practice {
     box-shadow var(--t-base),
     transform var(--t-base);
 }
-.practice .note.playing {
-  transform: scale(1.07);
-  box-shadow:
-    inset 0 -3px 0 var(--accent),
-    0 0 22px color-mix(in srgb, var(--accent) 34%, transparent);
-}
 .practice .note.playing:after {
   font-size: 22px;
   top: -17px;
+}
+
+/* 音游演出：画布在谱字下方，不增加谱面卡片或扫谱游标。 */
+#performance-stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+.practice.stage-active #performance-stage {
+  display: block;
+}
+.practice.stage-active main::before {
+  opacity: 0.55;
+}
+/* 舞台开着时只额外加一层极薄的文字光，背景与缩放沿用基础样式，
+   否则播放中和暂停后会出现两种不同的高亮外观。 */
+.practice.stage-active .note.playing {
+  color: var(--stage-ink, var(--accent-deep));
+  text-shadow: 0 0 10px
+    color-mix(in srgb, var(--stage-color) 26%, rgb(0 0 0 / 0));
+}
+.practice.stage-active .note.pause-token.playing {
+  color: var(--muted);
+  text-shadow: none;
+  transform: none;
+}
+.practice.stage-active .phrase.current .line-number,
+.practice.stage-active .phrase.current .lyric {
+  color: var(--stage-ink, var(--accent));
+}
+.performance-list {
+  display: grid;
+  gap: 8px;
+  max-height: 52dvh;
+  overflow: auto;
+  padding: 4px 2px;
+}
+.performance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 142px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--panel);
+  border-radius: var(--r-sm);
+}
+.performance-preview {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--font-num);
+}
+.performance-row select {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .performance-row {
+    grid-template-columns: minmax(0, 1fr) 124px;
+    gap: 6px;
+    padding: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .practice.stage-active #performance-stage {
+    display: none;
+  }
 }
 
 /* 底部：浮起的演奏控制台 */
@@ -2251,23 +2484,46 @@ body.practice {
   padding-right: 30%;
 }
 .practice.show-lyrics:not(.lyrics-off) .phrase .lyric {
-  display: block;
+  display: grid;
+  align-items: center;
+  justify-items: end;
   position: absolute;
   right: 22px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  bottom: 0;
   width: 26%;
   text-align: right;
   font-family: var(--font-mark);
   font-size: 14px;
   line-height: 1.75;
   letter-spacing: 2px;
+  white-space: pre-line;
   color: color-mix(in srgb, var(--ink) 30%, transparent);
   pointer-events: none;
   transition:
     color 1.4s var(--ease),
     letter-spacing 2s var(--ease),
     text-shadow 1.6s var(--ease);
+}
+.lyric-layer {
+  grid-area: 1 / 1;
+  width: 100%;
+  text-align: right;
+  white-space: pre-line;
+  opacity: 0;
+  transform: translateY(7px);
+  transition:
+    opacity 560ms var(--ease),
+    transform 560ms var(--ease);
+  will-change: opacity, transform;
+}
+.lyric-layer.active {
+  opacity: 1;
+  transform: none;
+}
+.lyric-layer.inactive {
+  opacity: 0;
+  transform: translateY(-7px);
 }
 .practice.show-lyrics:not(.lyrics-off) .phrase.current .lyric {
   color: color-mix(in srgb, var(--ink) 78%, transparent);
@@ -2282,20 +2538,83 @@ body.practice {
 }
 
 /* 编辑歌词的行列表 */
+#save-review-dialog { width: min(960px, calc(100vw - 28px)); }
+.save-review-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.save-review-columns section { min-width: 0; }
+.save-review-columns h3 { font-size: 13px; color: var(--muted); margin: 12px 0; }
+.save-review-preview { margin: 0; padding: 12px; max-height: 46vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-ui); font-size: 12px; line-height: 1.8; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); }
+@media (max-width: 600px) {
+  #save-review-dialog { padding: 18px 12px; }
+  .save-review-columns { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .save-review-preview { max-height: 24vh; }
+  #save-review-dialog .dialog-actions { flex-wrap: wrap; }
+}
+#lyrics-dialog {
+  width: min(900px, calc(100vw - 28px));
+}
+.lyrics-columns,
+.lyrics-list .lyrics-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+.lyrics-columns {
+  padding: 0 14px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .lyrics-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-height: 46vh;
   overflow: auto;
-  margin: 16px 0 4px;
+  margin: 8px 0 4px;
   padding: 2px 4px 2px 2px;
 }
-.lyrics-list label {
-  display: flex;
+.lyrics-list .lyrics-row {
   align-items: center;
-  gap: 10px;
   font-size: 12px;
+  padding: 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.lyrics-list .current-lyric {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--paper));
+}
+.lyrics-score {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+.lyrics-notation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  font-family: var(--font-num);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.lyrics-empty {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+.lyrics-repeat {
+  align-self: center;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0;
 }
 .lyrics-list .line-index {
   flex: 0 0 auto;
@@ -2306,13 +2625,23 @@ body.practice {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.lyrics-list input {
-  flex: 1;
+#lyrics-dialog textarea {
   min-width: 0;
-  font-family: var(--font-mark);
-  font-size: 14px;
+  min-height: 64px;
+  margin: 0;
+  font-family: var(--font-mark) !important;
+  font-size: 14px !important;
+  line-height: 1.65 !important;
   letter-spacing: 1px;
   padding: 7px 10px;
+}
+@media (max-width: 600px) {
+  #lyrics-dialog { padding: 18px 12px; }
+  .lyrics-columns,
+  .lyrics-list .lyrics-row { gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lyrics-score { grid-template-columns: 18px minmax(0, 1fr); gap: 6px; }
+  .lyrics-list .lyrics-row { padding: 8px 6px; }
+  .lyrics-columns { padding: 0 10px; }
 }
 
 /* ---------- 13. 主题 ---------- */
@@ -2721,9 +3050,7 @@ body[data-theme="dark"]:not(.practice) .note.playing {
     height: 28px;
   }
   .practice .phrase.current::before {
-    left: 0;
-    width: 3px;
-    height: 56px;
+    content: none;
   }
   .practice .transport {
     margin: 0 10px 10px;
@@ -2766,5 +3093,117 @@ body[data-theme="dark"]:not(.practice) .note.playing {
   .note.playing:after {
     animation: none;
     display: none;
+  }
+  /* 关闭动态效果不等于歌词要硬切：保留纯颜色/透明度的柔和过渡，去掉位移。 */
+  .practice.show-lyrics:not(.lyrics-off) .phrase .lyric {
+    transition:
+      color 1.4s var(--ease),
+      letter-spacing 2s var(--ease) !important;
+  }
+  .lyric-layer {
+    transform: none !important;
+    transition: opacity 420ms linear !important;
+  }
+}
+
+/* 一屏看全：整首按顺序分列，保留现有音符大小关系和点击/播放节点。 */
+.practice-overview main {
+  max-width: none;
+  padding: 12px 24px 8px;
+}
+.practice-overview .title-row {
+  margin-bottom: 4px;
+}
+.practice-overview #title {
+  font-size: 28px;
+}
+.practice-overview .score-meta {
+  margin-bottom: 4px;
+}
+.practice-overview .sheet-heading {
+  padding: 6px 8px;
+}
+#overview-status {
+  margin-left: auto;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+.practice-overview .score {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.overview-page {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: grid;
+  column-gap: 24px;
+  align-items: start;
+  transform-origin: top left;
+}
+.overview-page.measuring {
+  display: block;
+}
+.overview-column {
+  min-width: 0;
+}
+.practice-overview .phrase {
+  min-height: 0;
+  padding: 8px 0 10px 32px;
+  gap: 2px;
+}
+.practice-overview .phrase .line-number {
+  left: 0;
+  top: 18px;
+  width: 26px;
+  height: 26px;
+  color: var(--muted);
+}
+.practice-overview .row-repeat-mark {
+  margin-left: 6px;
+}
+.practice-overview.show-lyrics:not(.lyrics-off) .phrase {
+  padding-right: 0;
+}
+.practice-overview.show-lyrics:not(.lyrics-off) .phrase .lyric {
+  position: static;
+  flex: 0 0 100%;
+  width: 100%;
+  margin-top: 4px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.6px;
+  justify-items: start;
+}
+.practice-overview .phrase .lyric-layer {
+  text-align: left;
+}
+.practice-overview.show-lyrics:not(.lyrics-off) .phrase.current .lyric {
+  letter-spacing: 0.6px;
+}
+@media (max-width: 768px) {
+  .practice #practice-overview {
+    padding: 5px 9px;
+    font-size: 10px;
+  }
+  .practice-overview main {
+    padding: 8px 10px;
+  }
+  .practice-overview #title {
+    font-size: 22px;
+  }
+  .practice-overview .sheet-heading {
+    letter-spacing: 0.5px;
+    gap: 6px;
+  }
+  .practice-overview .sheet-heading > span:first-child {
+    display: none;
+  }
+  .practice-overview #overview-status {
+    margin-left: 0;
   }
 }

@@ -21,6 +21,23 @@ $ErrorActionPreference = "Stop"
 $root = "HKCU:\Software\Classes\harmonica"
 $handler = Join-Path $PSScriptRoot "launch-from-protocol.bat"
 
+function Notify-AssociationChange {
+    # Notify running Shell/browser processes instead of leaving stale associations.
+    if (-not ('Harmonica.ProtocolAssociations' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace Harmonica {
+    public static class ProtocolAssociations {
+        [DllImport("shell32.dll")]
+        public static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2);
+    }
+}
+'@
+    }
+    [Harmonica.ProtocolAssociations]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+}
+
 function Show-Status {
     if (-not (Test-Path -LiteralPath $root)) {
         Write-Host "harmonica:// is not registered."
@@ -47,6 +64,7 @@ if ($Status) {
 if ($Uninstall) {
     if (Test-Path -LiteralPath $root) {
         Remove-Item -LiteralPath $root -Recurse -Force
+        Notify-AssociationChange
         Write-Host "Removed the harmonica:// protocol."
     } else {
         Write-Host "harmonica:// was not registered."
@@ -70,6 +88,7 @@ New-ItemProperty -LiteralPath "$root\DefaultIcon" -Name "(default)" -Value "$ico
 New-Item -Path "$root\shell\open\command" -Force | Out-Null
 $command = '"' + $handler + '" "%1"'
 New-ItemProperty -LiteralPath "$root\shell\open\command" -Name "(default)" -Value $command -PropertyType String -Force | Out-Null
+Notify-AssociationChange
 
 Write-Host "Registered the harmonica:// protocol."
 Write-Host "  handler: $command"

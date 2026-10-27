@@ -41,7 +41,7 @@
 
 「底部播放栏 → 音色」现在可选择「口琴 · FluidR3」「口琴 · MusyngKite」或合成音。原有选择保持不变；选择按本机偏好保存，不改变乐谱。两个采样乐器独立缓存，切换或停止会清除所有已加载乐器的发声，避免残音。
 
-MusyngKite 文件原样保存在 public/audio；构建时作为纯文本内嵌到本地应用，运行时数据URL加载，兼容已有服务且不访问网络。许可为 CC BY-SA 3.0，完整条款与来源见 THIRD_PARTY_NOTICES.md 和 public/audio/MusyngKite-LICENSE.txt。
+MusyngKite 文件原样保存在 public/audio；与其他采样一样，通过本机静态地址在首次播放所选音色时加载，打开页面和选择音色不预载，不访问外网。2026-10-24起不再把采样文本内嵌进app.js，避免首页载入整套音库；循环表仍通过data URL提供。新增音色静态路径需要后端加载新版白名单。许可为 CC BY-SA 3.0，完整条款与来源见 THIRD_PARTY_NOTICES.md 和 public/audio/MusyngKite-LICENSE.txt。
 
 新音色使用独立的88音循环表。重建命令：`python scripts/calibrate-harmonica-loops.py work/musyngkite-pcm public/audio/musyngkite-loops-calibrated.json --musyngkite`。该采样存在包络衰减/音高起伏，因此循环搜索区间0.6–2.0秒、长度0.1–0.75秒，误差阈值与FluidR3分别设置；63个C/A倍音区可用音的循环音高相对原采样长段测量差小于8.1音分，不声称原库严格等律或长音完全拟真。
 

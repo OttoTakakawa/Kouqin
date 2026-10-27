@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
+    <canvas id="performance-stage" aria-hidden="true"></canvas>
     <div id="app">
       <aside class="sidebar" aria-label="乐谱库">
         <a class="brand" href="/" aria-label="Harmonica 首页"
@@ -57,6 +58,15 @@
             <button id="edit-mode" class="active">写谱</button
             ><button id="practice-mode">练习</button>
           </div>
+          <button
+            id="practice-overview"
+            class="pill practice-only"
+            type="button"
+            aria-pressed="false"
+            title="把整首谱放进一屏；分列时先左后右，再点恢复跟谱视图"
+          >
+            一屏看全
+          </button>
           <span id="save-state" role="status">未打开乐谱</span
           ><button id="settings-open" class="subtle">快捷键与外观</button>
         </header>
@@ -120,6 +130,7 @@
           <section id="editor-shell" class="sheet" aria-label="数字谱编辑台">
             <div class="sheet-heading">
               <span>MELODY <b>/</b> 旋律</span
+              ><span id="overview-status" hidden></span
               ><span id="note-count">0 个音符</span>
             </div>
             <div
@@ -182,7 +193,9 @@
           <div id="keyboard-help" class="keyboard edit-only"></div>
           <div class="document-actions edit-only">
             <button id="export" class="text-button">导出 JSON</button
+            ><button id="save-copy" class="text-button">另存副本</button
             ><button id="lyrics-open" class="text-button">编辑歌词</button
+            ><button id="performance-open" class="text-button">段落演出</button
             ><button id="restore-archive" class="text-button" hidden>
               恢复此版本</button
             ><button id="delete" class="text-button">删除乐谱</button
@@ -387,6 +400,16 @@
               max="150"
               value="100"
           /></label>
+          <label
+            >当前音放大<input
+              id="spotlight"
+              type="range"
+              min="100"
+              max="170"
+              step="2"
+              value="118"
+              title="练习模式里正在播放的那个数字放大多少"
+          /></label>
         </div>
         <p class="tiny">
           Z / C 类按键只在谱面聚焦时生效，按标准音长步进；按住 Shift
@@ -404,22 +427,81 @@
     <dialog id="lyrics-dialog">
       <form id="lyrics-form">
         <div class="dialog-heading">
-          <h2>歌词</h2>
+          <h2>编辑歌词</h2>
           <button type="button" class="icon close-dialog" aria-label="关闭">
             ×
           </button>
         </div>
-        <p>
-          每句一行，留空就不显示。歌词只在练习模式出现，可以随时用底部「歌词」关掉。
+        <p id="lyrics-help">
+          左侧对照数字谱，右侧填写对应歌词；留空就不显示。整行重复时可按遍分行，播放到第几遍就显示第几行；只写一行则每遍相同，少写的遍数留空。应用后还需保存乐谱，歌词只在练习模式显示。
         </p>
+        <div class="lyrics-columns" aria-hidden="true">
+          <span>对应数字谱</span><span>歌词</span>
+        </div>
         <div id="lyrics-list" class="lyrics-list"></div>
         <div class="dialog-actions">
           <button type="button" class="subtle close-dialog">取消</button
-          ><button class="primary" type="submit">保存歌词</button>
+          ><button class="primary" type="submit">应用歌词</button>
         </div>
       </form>
     </dialog>
+    <dialog
+      id="save-review-dialog"
+      aria-labelledby="save-review-title"
+      aria-describedby="save-review-help"
+    >
+      <div class="dialog-heading">
+        <h2 id="save-review-title">核对旧草稿</h2>
+        <button type="button" class="icon close-dialog" aria-label="关闭">
+          ×
+        </button>
+      </div>
+      <p id="save-review-help">
+        这份草稿没有记录原来的保存版本。请核对磁盘版和当前编辑，确认后可保存到原谱；保存前会备份磁盘版。也可以另存副本。
+      </p>
+      <div class="save-review-columns">
+        <section>
+          <h3>磁盘上已保存的版本</h3>
+          <pre id="save-review-disk" class="save-review-preview"></pre>
+        </section>
+        <section>
+          <h3>当前编辑 · 将要保存</h3>
+          <pre id="save-review-current" class="save-review-preview"></pre>
+        </section>
+      </div>
+      <p id="save-review-error" class="error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="subtle close-dialog">取消</button>
+        <button type="button" id="save-review-copy">另存副本</button>
+        <button type="button" id="save-review-confirm" class="primary">
+          确认，保存到原谱
+        </button>
+      </div>
+    </dialog>
     <div id="toast" role="status" hidden></div>
+    <dialog id="performance-dialog">
+      <form id="performance-form">
+        <div class="dialog-heading">
+          <h2>段落演出</h2>
+          <button type="button" class="icon close-dialog" aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <p id="performance-help">
+          自动随旋律的疏密与起伏变化。把副歌设为「副歌 ·
+          更强」，色彩、光带和爆点会更鲜明；平缓段可以收着。只影响练习模式的特效。
+        </p>
+        <div
+          id="performance-list"
+          class="performance-list"
+          aria-describedby="performance-help"
+        ></div>
+        <div class="dialog-actions">
+          <button type="button" class="subtle close-dialog">取消</button>
+          <button class="primary" type="submit">应用演出</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

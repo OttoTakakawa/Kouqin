@@ -81,6 +81,14 @@ export function validateScore(s) {
     throw Error("整体音长范围为 0.25–2 倍。");
   for (const n of s.notes) {
     if (!n || typeof n !== "object") throw Error("音符不能为空。");
+    if (n.repeat !== undefined &&
+        (n.type !== "note" || !Number.isInteger(n.repeat) || n.repeat < 2 || n.repeat > 8))
+      throw Error("行重复次数需要为 2–8 的整数，并标在音符上。");
+    if (
+      n.performance !== undefined &&
+      !["chorus", "calm"].includes(n.performance)
+    )
+      throw Error("段落演出只接受副歌或平缓标记。");
     if (n.type === "break" || n.type === "space") continue;
     if (
       n.type !== "note" ||
@@ -193,17 +201,43 @@ export function phraseRange(notes, at) {
   return { start, end };
 }
 
+// Store on every note of a row so deleting its first note does not lose the mark.
+// Split rows inherit it; merged rows use the larger count until explicitly reset.
+export function phraseRepeat(notes, start, end) {
+  let count = 1;
+  for (let i = start; i < end; i++)
+    if (notes[i].type === "note" && Number.isInteger(notes[i].repeat))
+      count = Math.max(count, Math.min(8, notes[i].repeat));
+  return count;
+}
+
 export function timeline(score, start = 0, end = score.notes.length) {
   let time = 0;
   const events = [];
-  for (let i = start; i < end; i++) {
-    const n = score.notes[i];
-    if (n.type !== "note") continue;
-    const duration =
-      ((n.duration + (n.tailHold ?? 0)) * (score.durationScale ?? 1) * 60) /
-      score.bpm;
-    events.push({ index: i, note: midi(n, score.key), at: time, duration });
-    time += duration;
+  for (let rowStart = 0; rowStart < score.notes.length;) {
+    let rowEnd = rowStart, firstNote = -1, lastNote = -1;
+    while (rowEnd < score.notes.length && score.notes[rowEnd].type !== "break") {
+      if (score.notes[rowEnd].type === "note") {
+        if (firstNote < 0) firstNote = rowEnd;
+        lastNote = rowEnd;
+      }
+      rowEnd++;
+    }
+    // Partial A/B regions play once; only complete annotated rows repeat.
+    const count = firstNote >= 0 && start <= firstNote && end > lastNote
+      ? phraseRepeat(score.notes, rowStart, rowEnd) : 1;
+    for (let pass = 0; pass < count; pass++) {
+      for (let i = Math.max(start, rowStart); i < Math.min(end, rowEnd); i++) {
+        const n = score.notes[i];
+        if (n.type !== "note") continue;
+        const duration =
+          ((n.duration + (n.tailHold ?? 0)) * (score.durationScale ?? 1) * 60) /
+          score.bpm;
+        events.push({ index: i, note: midi(n, score.key), at: time, duration });
+        time += duration;
+      }
+    }
+    rowStart = rowEnd + 1;
   }
   return { events, duration: time };
 }
