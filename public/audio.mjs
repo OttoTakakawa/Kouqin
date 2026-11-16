@@ -1,4 +1,4 @@
-import { Soundfont } from "smplr";
+import { Instrument, Soundfont, soundfontToPreset } from "smplr";
 import { timeline } from "./model.mjs";
 import harmonicaLoops from "./audio/harmonica-loops-calibrated.json";
 import musyngkiteLoops from "./audio/musyngkite-loops-calibrated.json";
@@ -41,6 +41,53 @@ const sampledVoices = {
   },
 };
 
+// Apply the softer onset to each decoded sample once, before smplr loops it.
+// This keeps the original encoded bank and loop points unchanged.
+const SoftAttackSoundfont = Instrument(async (context, bank, instrument) => {
+  const response = await fetch(bank.url);
+  if (!response.ok) throw Error(`音色文件读取失败 (${response.status})`);
+  const source = await response.text();
+  const start = source.indexOf("= ");
+  const end = source.lastIndexOf(",");
+  if (start < 0 || end < start) throw Error("音色文件格式无效");
+  const samples = JSON.parse(source.slice(start + 2, end) + "}");
+  const buffers = new Map();
+  await Promise.all(
+    Object.entries(samples).map(async ([name, data]) => {
+      const bytes = Uint8Array.from(
+        atob(data.slice(data.indexOf(",") + 1)),
+        (c) => c.charCodeAt(0),
+      );
+      const buffer = await context.decodeAudioData(bytes.buffer);
+      const length = Math.min(
+        buffer.length,
+        Math.round(buffer.sampleRate * 0.08),
+      );
+      for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+        const samples = buffer.getChannelData(channel);
+        for (let i = 0; i < length; i++) samples[i] *= i / length;
+      }
+      buffers.set(name, buffer);
+    }),
+  );
+  const pitches = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const loops = {};
+  for (const [name, offsets] of Object.entries(bank.loops)) {
+    const match = /^([A-G])(#?)(\d+)$/.exec(name);
+    if (!match) continue;
+    const midi =
+      (Number(match[3]) + 1) * 12 + pitches[match[1]] + (match[2] ? 1 : 0);
+    loops[midi] = offsets.map((offset) => offset / 44100);
+  }
+  const gain = context.createGain();
+  gain.gain.value = bank.gain;
+  instrument.output.addInsert(gain);
+  await instrument.loadInstrument(
+    soundfontToPreset([...buffers.keys()], loops),
+    buffers,
+  );
+});
+
 export class Player {
   context = null;
   instruments = new Map();
@@ -69,15 +116,22 @@ export class Player {
     if (bank && !this.instruments.has(voice)) {
       if (!this.loading.has(voice)) {
         const pending = (async () => {
-          const instrument = Soundfont(this.context, {
-            instrumentUrl: bank.url,
-            loopDataUrl:
-              "data:application/json," +
-              encodeURIComponent(JSON.stringify(bank.loops)),
-            destination: this.gain,
-            extraGain: bank.gain,
-            volume: 100,
-          });
+          const instrument =
+            voice === "generaluser"
+              ? SoftAttackSoundfont(this.context, {
+                  ...bank,
+                  destination: this.gain,
+                  volume: 100,
+                })
+              : Soundfont(this.context, {
+                  instrumentUrl: bank.url,
+                  loopDataUrl:
+                    "data:application/json," +
+                    encodeURIComponent(JSON.stringify(bank.loops)),
+                  destination: this.gain,
+                  extraGain: bank.gain,
+                  volume: 100,
+                });
           await instrument.ready;
           this.instruments.set(voice, instrument);
         })().catch((e) => {
